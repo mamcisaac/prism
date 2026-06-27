@@ -1,0 +1,284 @@
+/* ============================================================
+ * Connect the Thoughts — shared arcade UI components.
+ *
+ * CANONICAL SOURCE. Edit only here (connectthethoughts/shared/), then run
+ *   node scripts/sync-shared.mjs
+ * to vend byte-identical copies into each game repo. `--check` flags drift.
+ *
+ * Token-driven via --accent. Per the arcade cohesion contract (tokens.css,
+ * shared/README.md), games do NOT override --accent: there is ONE brand accent
+ * (teal) across all games, so the chrome AND these components stay consistent.
+ * Per-game identity lives on the homepage cards (data-tone) and in each game's
+ * own board/illustration CSS — not in --accent. Text that sits ON the accent
+ * uses --on-accent (white in light mode; a dark value in dark mode, set in
+ * tokens.css — the dark teal accent needs dark on-accent text).
+ * ============================================================ */
+
+/* ── Semantic state tokens + feedback cues (shared; promoted from switchback) ──
+ * --good = correct/satisfied · --warn = incomplete/not-yet · --bad = error/overshoot.
+ * Pair every colour cue with a glyph/word (.cue-* or a caption) so feedback is never
+ * colour-only. Live correctness cues belong ONLY where they don't spoil the answer. */
+:root { --good: #16a34a; --warn: #ca8a04; --bad: #dc2626; }
+[data-theme="dark"] { --good: #4ade80; --warn: #facc15; --bad: #f87171; }
+
+/* Inline feedback text */
+.feedback.good { color: var(--good); font-weight: 700; }
+.feedback.warn { color: var(--warn); }
+.feedback.bad  { color: var(--bad); }
+
+/* Colour-blind-safe glyph helper — prefix any cue text/element with a symbol so the
+ * meaning survives without colour. Unconditional (not gated behind a setting). */
+.cue-good::before { content: "✓ "; }
+.cue-warn::before { content: "~ "; }
+.cue-bad::before  { content: "✗ "; }
+
+/* Tri-state target counter (current / target): under = not-yet, match = satisfied,
+ * over = overshoot. Colours the value + caption. Safe only for non-spoiler metrics. */
+.con { display: flex; flex-direction: column; gap: 1px; }
+.con-label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--fg-subtle); font-weight: 600; }
+.con-value { font-size: 20px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; transition: color 0.15s ease; }
+.con-note  { font-size: 11px; font-weight: 600; color: var(--fg-subtle); min-height: 1.1em; transition: color 0.15s ease; }
+.con.is-under .con-value, .con.is-under .con-note { color: var(--warn); }
+.con.is-match .con-value, .con.is-match .con-note { color: var(--good); }
+.con.is-over  .con-value, .con.is-over  .con-note { color: var(--bad); }
+
+/* Self-announcing solve — pulse a primary action once the answer is provably correct.
+ * Use #submit-btn.pulse (legacy) or .btn.is-solved. Text flips per theme for contrast. */
+#submit-btn.pulse, .btn.is-solved {
+  background: var(--good); border-color: var(--good); color: #fff;
+  animation: submit-pulse 1.1s ease-in-out infinite;
+}
+[data-theme="dark"] #submit-btn.pulse, [data-theme="dark"] .btn.is-solved { color: #06302b; }
+@keyframes submit-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 55%, transparent); }
+  50%      { box-shadow: 0 0 0 6px color-mix(in srgb, var(--good) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #submit-btn.pulse, .btn.is-solved { animation: none; }
+}
+
+/* ── Buttons ── */
+.btn {
+  background: var(--accent);
+  color: var(--on-accent, #fff);
+  border: none;
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.12s, transform 0.08s;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn:hover:not(:disabled) { filter: brightness(1.08); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn.secondary { background: transparent; color: var(--fg-muted); border: 1px solid var(--border); }
+.btn.secondary:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.btn.ghost { background: transparent; color: var(--accent); border: 1px dashed var(--accent); }
+
+/* ── Difficulty selector (Easy / Medium / Hard) ── */
+.diff-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.diff-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--bg-elev);
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  padding: 9px 6px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.diff-btn .diff-sub {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--fg-subtle);
+  text-transform: uppercase;
+}
+.diff-btn:hover:not(.active) { border-color: var(--accent); color: var(--fg); }
+.diff-btn.active { background: var(--accent); color: var(--on-accent, #fff); border-color: var(--accent); }
+.diff-btn.active .diff-sub { color: var(--on-accent, #fff); opacity: 0.85; }
+
+/* ── Results / completion card ── */
+.results-card {
+  text-align: center;
+  background: var(--bg-elev);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md, 12px);
+  padding: 22px;
+  margin-top: 18px;
+  box-shadow: var(--shadow-md);
+  animation: results-pop 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
+}
+@keyframes results-pop {
+  from { opacity: 0; transform: scale(0.9) translateY(8px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.results-headline {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--fg);
+  letter-spacing: 0.01em;
+  margin-bottom: 8px;
+}
+.results-stars {
+  font-size: 40px;
+  letter-spacing: 4px;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.results-time {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 2px;
+}
+.results-sub {
+  font-size: 13px;
+  color: var(--fg-muted);
+  margin: 8px 0 14px;
+  font-variant-numeric: tabular-nums;
+}
+.daily-complete-note {
+  margin: 12px 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  text-align: center;
+}
+.placements { margin: 8px 0 4px; text-align: center; }
+.results-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.results-actions .btn { flex: 1; min-width: 100px; }
+
+/* ── Leaderboard difficulty tabs (modal) ── */
+.lb-diff-tabs { display: flex; gap: 4px; margin: 8px 0 4px; flex-wrap: wrap; }
+.lb-diff-tab {
+  background: transparent;
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.lb-diff-tab.active { background: var(--accent); color: var(--on-accent, #fff); border-color: var(--accent); font-weight: 700; }
+
+/* ── Mobile sizing (shared so every game's chrome stays cohesive) ── */
+@media (max-width: 480px) {
+  .btn { padding: 11px 14px; font-size: 14px; }
+  .diff-row { gap: 6px; margin-bottom: 10px; }
+  .diff-btn { padding: 7px 4px; font-size: 13px; }
+  .results-stars { font-size: 34px; }
+}
+
+/* ── Daily / Random mode toggle ── */
+.mode-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.mode-btn {
+  background: transparent; color: var(--fg-muted); border: none;
+  padding: 8px 16px; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.mode-btn.active { background: var(--accent); color: var(--on-accent, #fff); }
+.mode-btn:not(.active):hover { color: var(--fg); }
+
+/* ── Leaderboard modal + inline board ── */
+.lb-blurb { font-size: 13px; color: var(--fg-muted); margin: -4px 0 14px; text-align: center; }
+.lb-body { min-height: 60px; }
+.lb-nav { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 12px; gap: 8px; }
+.lb-nav-btn { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; color: var(--fg); font-size: 16px; touch-action: manipulation; }
+.lb-nav-btn:disabled { opacity: 0.35; cursor: default; }
+#lb-day-label, .lb-day-label { font-size: 13px; color: var(--fg-muted); font-weight: 600; }
+.lb-scope-tabs { display: flex; gap: 6px; margin: 8px 0 4px; }
+.lb-scope-tab {
+  flex: 1; background: transparent; color: var(--fg-muted); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 8px; font-size: 13px; font-weight: 600; cursor: pointer; touch-action: manipulation;
+}
+.lb-scope-tab.active { background: var(--accent); color: var(--on-accent, #fff); border-color: var(--accent); }
+.lb-diff-tabs { display: flex; gap: 4px; margin: 8px 0 4px; flex-wrap: wrap; }
+.lb-you-head { font-size: 13px; font-weight: 700; margin: 2px 0 8px; }
+.lb-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.lb-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; font-size: 13px; }
+.lb-row.me { background: color-mix(in srgb, var(--accent) 22%, var(--bg-elev)); outline: 1px solid var(--accent); }
+.lb-rank { width: 1.6em; text-align: right; color: var(--fg-subtle); font-variant-numeric: tabular-nums; font-weight: 700; }
+.lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-stars { color: var(--accent); letter-spacing: 1px; font-size: 12px; margin: 0 4px; }
+.lb-score { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); }
+.lb-status { font-size: 13px; color: var(--fg-muted); text-align: center; padding: 14px 0; }
+.lb-you-note { padding-top: 8px; }
+.lb-hint { font-size: 13px; color: var(--fg-subtle); text-align: center; }
+.lb-inline { margin: 14px 0 4px; text-align: left; }
+.lb-inline:empty { display: none; }
+.lb-modal-inner { background: var(--bg-elev); border-radius: var(--radius-md, 12px); padding: 24px; max-width: 440px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative; }
+.lb-join { padding: 0.5rem 0; }
+.lb-join-title { font-size: 14px; font-weight: 700; margin-bottom: 8px; text-align: center; }
+.lb-join-row { display: flex; gap: 8px; }
+.lb-input { flex: 1; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font-size: 14px; }
+.lb-input:focus { outline: none; border-color: var(--accent); }
+
+/* Leaderboard "You" tab — shared stats panel (solves, streaks, stars
+   distribution). Rendered by the leaderboard factory for every game. */
+.stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 4px 0 16px; }
+.stat-tile { background: var(--bg); border: 1px solid var(--border); padding: 12px; border-radius: var(--radius-sm); text-align: center; }
+.stat-tile .label { font-size: 12px; color: var(--fg-subtle); text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-tile .value { font-size: 28px; font-weight: 700; margin-top: 4px; color: var(--fg); }
+.stat-section { margin-top: 16px; }
+.stat-section h3 { font-size: 13px; text-transform: uppercase; color: var(--fg-subtle); margin: 8px 0; letter-spacing: 0.5px; }
+.bar-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 14px; color: var(--fg); }
+.bar-row .bar-label { width: 80px; text-align: right; color: var(--fg-muted); }
+.bar-row .bar-track { flex: 1; height: 18px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+.bar-row .bar-fill { height: 100%; background: var(--accent); transition: width 0.4s ease; display: flex; align-items: center; justify-content: flex-end; color: #fff; font-size: 12px; padding-right: 6px; min-width: 1.5em; }
+
+/* "Past Daily Puzzles" archive calendar (arcade-archive.js). Modal chrome reuses
+   the canonical .modal-backdrop/.modal; these style the day list. */
+.archive-card { max-width: 460px; }
+.archive-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; max-height: 62vh; overflow-y: auto; }
+.archive-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; color: var(--fg); font: inherit; text-align: left; transition: border-color 0.15s ease; }
+.archive-item:hover { border-color: var(--accent); }
+.archive-item__date { font-weight: 600; }
+.archive-item__day { color: var(--fg-muted); font-size: 13px; }
+.archive-item--today { border-color: var(--accent); }
+
+/* First-play tutorial carousel (arcade-tutorial.js). Modal chrome reuses the
+   canonical .modal-backdrop/.modal; these style the slides + nav. */
+.tutorial-card { max-width: 460px; text-align: center; }
+.tutorial-art { display: flex; align-items: center; justify-content: center; min-height: 84px; margin: 4px 0 14px; color: var(--accent); }
+.tutorial-art svg { max-width: 100%; height: auto; }
+.tutorial-card h2 { margin-bottom: 8px; }
+.tutorial-body { color: var(--fg-muted); line-height: 1.55; font-size: 15px; }
+.tutorial-body b, .tutorial-body strong { color: var(--fg); }
+.tutorial-dots { display: flex; justify-content: center; gap: 8px; margin: 18px 0; }
+.tutorial-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: background 0.15s ease; }
+.tutorial-dot.active { background: var(--accent); }
+.tutorial-nav { display: flex; gap: 10px; justify-content: space-between; }
+.tutorial-nav .tutorial-back[hidden] { display: none; }
+.tutorial-nav .tutorial-back { margin-right: auto; }
+.tutorial-nav .tutorial-next { margin-left: auto; }
+/* "Show me how to play" launcher injected into each game's help/rules modal. */
+.tutorial-launch { margin-top: 16px; width: 100%; }

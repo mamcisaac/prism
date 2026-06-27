@@ -4,16 +4,21 @@
 
 import { generateBoard, mulberry32 } from './generate.js';
 import { trace, lockedSet, rotatableIndices, ALT_ORIENT, xy, idx } from './engine.js';
+import {
+  isLeaderboardConfigured, submitScore, submitCompletion, compositeScore, alltimeBoard,
+  cleanHandle, starsHtml, formatTime, rowParts, recordHistory, historyStats, loadHistory, reportStats, todayStr,
+} from './arcade-leaderboard.js';
+import { createLeaderboardModal } from './arcade-leaderboard-ui.js';
 
+const GAME_SLUG = 'prism';
 const DIFFS = ['easy', 'medium', 'hard'];
-const DIFF_LABEL = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
+const DIFF_LABEL = { easy: 'Easy', medium: 'Medium', hard: 'Hard', total: 'Total' };
 
 // ---- colour: RGB bitmask -> glow ----
 const GLOW = { 1: '#ff5d5d', 2: '#54e08a', 4: '#5b9bff', 3: '#ffd24a', 5: '#ff6dd0', 6: '#4fe3e8', 7: '#fff2bf' };
 const glow = (c) => GLOW[c] || '#fff2bf';
 
 // ---- daily seeding (UTC date, like the rest of the arcade) ----
-function todayStr() { const d = new Date(); return d.getUTCFullYear() + '-' + (d.getUTCMonth() + 1) + '-' + d.getUTCDate(); }
 function dailySeed(diff) {
   const d = new Date();
   const base = d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
@@ -21,35 +26,30 @@ function dailySeed(diff) {
   return ((base * 2654435761) ^ (off * 0x9e3779b9)) >>> 0;
 }
 
-// ---- persistent stats ----
-const SKEY = 'ctt.prism.stats';
-function loadStats() {
-  try { return Object.assign({ solves: 0, streak: 0, best: 0, lastDay: null, done: {} }, JSON.parse(localStorage.getItem(SKEY)) || {}); }
-  catch (_) { return { solves: 0, streak: 0, best: 0, lastDay: null, done: {} }; }
-}
-function saveStats(s) { try { localStorage.setItem(SKEY, JSON.stringify(s)); } catch (_) {} }
-let stats = loadStats();
+// ---- leaderboard handle + per-board local bests ----
+const HKEY = 'ctt.prism.handle';
+function loadHandle() { try { return localStorage.getItem(HKEY) || ''; } catch (_) { return ''; } }
+function saveHandle(h) { try { localStorage.setItem(HKEY, h); } catch (_) {} }
+let lbHandle = loadHandle();
+const BKEY = 'ctt.prism.bests';
+function loadBests() { try { return JSON.parse(localStorage.getItem(BKEY)) || {}; } catch (_) { return {}; } }
+function saveBests(b) { try { localStorage.setItem(BKEY, JSON.stringify(b)); } catch (_) {} }
+let bests = loadBests();
 
-function recordSolve(diff, isDaily) {
-  if (!isDaily) return;
-  const day = todayStr();
-  const key = day + '|' + diff;
-  if (stats.done[key]) return; // already counted this daily — don't inflate on replay
-  stats.done[key] = true;
-  stats.solves++;
-  // streak = consecutive days with at least one daily solve
-  if (stats.lastDay !== day) {
-    const y = new Date(); y.setUTCDate(y.getUTCDate() - 1);
-    const yday = y.getUTCFullYear() + '-' + (y.getUTCMonth() + 1) + '-' + y.getUTCDate();
-    stats.streak = stats.lastDay === yday ? stats.streak + 1 : 1;
-    stats.lastDay = day;
-    stats.best = Math.max(stats.best, stats.streak);
-  }
-  saveStats(stats);
-}
+// ---- per-day run: first-attempt eligibility + the combined Total board ----
+const RKEY = 'ctt.prism.run';
+function loadRun() { try { const r = JSON.parse(localStorage.getItem(RKEY)); if (r && r.date === todayStr()) return r; } catch (_) {} return { date: todayStr(), results: {} }; }
+function saveRun(r) { try { localStorage.setItem(RKEY, JSON.stringify(r)); } catch (_) {} }
+function recordRunResult(diff, st, timeMs, moves) { const r = loadRun(); if (!r.results[diff]) { r.results[diff] = { stars: st, timeMs, moves }; saveRun(r); } return loadRun(); }
 
-function stars(moves, par) { const over = moves - par; return over <= 0 ? 3 : over <= 2 ? 2 : over <= 4 ? 1 : 0; }
-const starStr = (n) => '★★★☆☆☆'.slice(3 - n, 6 - n);
+// ---- leaderboard board keys (daily board + day navigation) ----
+const curDiff = () => (state ? state.diff : 'easy');
+function boardKeyForOffset(offset, diff) { const d = new Date(); d.setUTCDate(d.getUTCDate() - offset); const base = d.getUTCFullYear() + '-' + (d.getUTCMonth() + 1) + '-' + d.getUTCDate(); return base + '|' + (diff || curDiff()); }
+function totalBoardKey() { return todayStr() + '|total'; }
+function dayLabelForOffset(offset) { if (offset === 0) return 'Today'; if (offset === 1) return 'Yesterday'; const d = new Date(); d.setUTCDate(d.getUTCDate() - offset); return d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' }); }
+
+function starCount(moves, par) { const over = moves - par; return over <= 0 ? 3 : over <= 2 ? 2 : over <= 4 ? 1 : 0; }
+const doneToday = (diff) => loadHistory(GAME_SLUG).some((h) => h.date === todayStr() && h.difficulty === diff);
 
 // ---- game state ----
 let state = null;  // { diff, isDaily, board, par, moves, finished }
@@ -58,7 +58,8 @@ let cell = 48, pad = 18;
 function newGame(diff, isDaily) {
   const seed = isDaily ? dailySeed(diff) : (mulberry32((Date.now() ^ (Math.random() * 1e9)) >>> 0)() * 4294967296) >>> 0;
   const g = generateBoard(seed, diff);
-  state = { diff, isDaily, board: g.board, par: g.par, moves: 0, finished: false, seed };
+  state = { diff, isDaily, board: g.board, par: g.par, moves: 0, finished: false, seed, startMs: Date.now() };
+  const li = document.getElementById('lb-inline'); if (li) li.innerHTML = '';
   layout();
   render(true);
   syncChrome();
@@ -193,22 +194,80 @@ function onClick(ev) {
 // ---- win ----
 function win() {
   state.finished = true;
-  const st = stars(state.moves, state.par);
-  recordSolve(state.diff, state.isDaily);
+  const timeMs = Date.now() - state.startMs;
+  const st = starCount(state.moves, state.par);
+  let firstAttempt = false, run = null;
+  if (state.isDaily) {
+    firstAttempt = !loadRun().results[state.diff];
+    recordHistory(GAME_SLUG, { difficulty: state.diff, stars: st, timeMs, moves: state.moves, date: todayStr() });
+    reportStats(GAME_SLUG);
+    run = recordRunResult(state.diff, st, timeMs, state.moves);
+  }
   bloomUntil = performance.now() + 900; chime(680, 0.6); setTimeout(() => chime(880, 0.6), 90); setTimeout(() => chime(1100, 0.7), 180);
   render();
   const ov = document.getElementById('win');
-  ov.querySelector('.win-stars').textContent = starStr(st);
+  ov.querySelector('.win-stars').textContent = starsHtml(st);
   ov.querySelector('.win-line').textContent = `Solved in ${state.moves} ${state.moves === 1 ? 'move' : 'moves'} · par ${state.par}`;
-  ov.querySelector('.win-sub').textContent = state.isDaily ? `${DIFF_LABEL[state.diff]} daily — streak ${stats.streak} 🔆` : 'Random puzzle';
+  ov.querySelector('.win-sub').textContent = state.isDaily ? `${DIFF_LABEL[state.diff]} daily · ${formatTime(timeMs)}` : 'Random puzzle';
+  renderWinLeaderboard(document.getElementById('lb-inline'), st, timeMs, run, firstAttempt);
   ov.classList.add('show');
   syncChrome();
 }
 
+// Post-win panel: submit the first daily attempt (prompting for a name once),
+// then show the standing board. Mirrors the other arcade dailies.
+function renderWinLeaderboard(mount, st, timeMs, run, firstAttempt) {
+  if (!mount) return;
+  mount.innerHTML = '';
+  if (!isLeaderboardConfigured()) return;
+  if (!state.isDaily) { mount.innerHTML = '<div class="lb-hint">Switch to a daily to join the leaderboard.</div>'; return; }
+  const board = boardKeyForOffset(0, state.diff);
+  if (!firstAttempt) { lbUi.renderBoard(mount, board, lbHandle || null); return; }
+  const composite = compositeScore(st, timeMs);
+
+  async function doSubmit(name) {
+    if (bests[board] !== undefined && composite >= bests[board]) { lbUi.renderBoard(mount, board, name); return; }
+    mount.innerHTML = '<div class="lb-status">Submitting…</div>';
+    const ok = await submitCompletion({ game: GAME_SLUG, difficulty: state.diff, stars: st, tiebreakMs: timeMs, handle: name, board, meta: { moves: state.moves, par: state.par } });
+    if (ok) { bests[board] = composite; saveBests(bests); }
+    else if (bests[board] === undefined) { mount.innerHTML = '<div class="lb-status">Couldn\'t reach the leaderboard — your solve is saved under “You”.</div>'; return; }
+    lbUi.renderBoard(mount, board, name);
+    if (run && DIFFS.every((d) => run.results[d])) { // combined Total board once all three are done
+      const totalTime = DIFFS.reduce((s, d) => s + run.results[d].timeMs, 0);
+      const totalStars = Math.min(...DIFFS.map((d) => run.results[d].stars));
+      const totalMoves = DIFFS.reduce((s, d) => s + run.results[d].moves, 0);
+      const tBoard = totalBoardKey(), tComp = compositeScore(totalStars, totalTime);
+      if (bests[tBoard] === undefined || tComp < bests[tBoard]) {
+        const meta = { stars: totalStars, timeMs: totalTime, moves: totalMoves, difficulty: 'total' };
+        const a = await submitScore({ game: GAME_SLUG, board: tBoard, handle: name, score: tComp, meta });
+        const b = await submitScore({ game: GAME_SLUG, board: alltimeBoard('total'), handle: name, score: tComp, meta });
+        if (a || b) { bests[tBoard] = tComp; saveBests(bests); }
+      }
+    }
+  }
+
+  if (lbHandle) { doSubmit(lbHandle); return; }
+  mount.innerHTML = '<div class="lb-join"><div class="lb-join-title">🏆 Join today\'s leaderboard:</div>'
+    + '<div class="lb-join-row"><input id="lb-handle" class="lb-input" type="text" maxlength="24" placeholder="Your name" autocomplete="off" aria-label="Your name" />'
+    + '<button id="lb-submit" class="btn" type="button">Submit</button></div></div>';
+  const input = mount.querySelector('#lb-handle'), btn = mount.querySelector('#lb-submit');
+  input.focus();
+  btn.addEventListener('click', () => { const name = cleanHandle(input.value); if (!name) { input.focus(); return; } lbHandle = name; saveHandle(lbHandle); doSubmit(name); });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
+}
+
+const lbUi = createLeaderboardModal({
+  gameSlug: GAME_SLUG, difficulties: DIFFS, diffLabel: DIFF_LABEL,
+  getDifficulty: () => curDiff(), getHandle: () => lbHandle,
+  boardKeyForOffset, dayLabelForOffset,
+  rowStat: (r) => formatTime(rowParts(r).timeMs),
+  youRow: (best) => formatTime(best.timeMs),
+});
+
 function shareText() {
-  const st = stars(state.moves, state.par);
+  const st = starCount(state.moves, state.par);
   const tag = state.isDaily ? `${todayStr()} · ${DIFF_LABEL[state.diff]}` : 'Random';
-  return `Prism ✦ ${tag}\nSolved in ${state.moves} (par ${state.par}) ${starStr(st)}\nconnectthethoughts.ca/prism`;
+  return `Prism ✦ ${tag}\nSolved in ${state.moves} (par ${state.par}) ${starsHtml(st)}\nconnectthethoughts.ca/prism`;
 }
 
 // ---- gentle WebAudio chime (many-small-completions juice) ----
@@ -229,13 +288,13 @@ function chime(freq, gain = 0.4) {
 
 // ---- chrome wiring ----
 function syncChrome() {
-  const day = todayStr();
   document.querySelectorAll('.diff-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.diff === state.diff && state.isDaily);
-    btn.classList.toggle('done', !!stats.done[day + '|' + btn.dataset.diff]); // ★ on dailies cleared today
+    btn.classList.toggle('done', doneToday(btn.dataset.diff)); // ★ on dailies cleared today
   });
   document.getElementById('mode-label').textContent = state.isDaily ? `${DIFF_LABEL[state.diff]} · today` : 'Random';
-  document.getElementById('streak').textContent = stats.streak ? `🔆 ${stats.streak}` : '';
+  const cur = historyStats(GAME_SLUG).currentStreak;
+  document.getElementById('streak').textContent = cur ? `🔆 ${cur}` : '';
 }
 
 function initTheme() {
@@ -251,6 +310,7 @@ function toggleTheme() {
 
 function boot() {
   initTheme();
+  lbUi.wire();
   canvas().addEventListener('click', onClick);
   document.querySelectorAll('.diff-btn').forEach((btn) => btn.addEventListener('click', () => { document.getElementById('win').classList.remove('show'); newGame(btn.dataset.diff, true); }));
   document.getElementById('new-btn').addEventListener('click', () => { document.getElementById('win').classList.remove('show'); newGame(state.diff, false); });

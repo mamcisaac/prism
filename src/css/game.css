@@ -89,3 +89,10 @@ body {
 .modal-card strong { color: var(--fg); }
 .muted { color: var(--fg-subtle) !important; font-size: 13px; }
 .modal-x { position: absolute; top: 12px; right: 14px; border: none; background: transparent; color: var(--fg-subtle); font-size: 26px; cursor: pointer; line-height: 1; }
+
+/* leaderboard modal shell (the inner card + lb-* content come from arcade-components.css) */
+.modal-backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: 20px; z-index: 25;
+  background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(4px); }
+.modal-backdrop[hidden] { display: none; }
+.modal-close-x { position: absolute; top: 12px; right: 14px; border: none; background: transparent; color: var(--fg-subtle); font-size: 26px; cursor: pointer; line-height: 1; }
+.lb-modal-inner h2 { margin: 0 0 6px; color: var(--accent); }

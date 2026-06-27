@@ -8,6 +8,7 @@
   <title>Prism — Connect the Thoughts</title>
   <link rel="icon" href="favicon.svg" />
   <link rel="stylesheet" href="src/css/tokens.css" />
+  <link rel="stylesheet" href="src/css/arcade-components.css" />
   <link rel="stylesheet" href="src/css/game.css" />
 </head>
 <body>
@@ -18,6 +19,7 @@
     </a>
     <div class="chrome-actions">
       <span id="streak" class="streak"></span>
+      <button id="lbButton" class="icon-btn" title="Leaderboard">🏆</button>
       <button id="mute-btn" class="icon-btn" title="Mute">🔊</button>
       <button id="help-btn" class="icon-btn" title="How to play">?</button>
       <button id="theme-btn" class="icon-btn" title="Toggle dark mode">◐</button>
@@ -53,6 +55,7 @@
       <div class="win-stars">★★★</div>
       <div class="win-line"></div>
       <div class="win-sub"></div>
+      <div id="lb-inline" class="lb-inline"></div>
       <div class="overlay-btns">
         <button id="win-share" class="ghost-btn">Share</button>
         <button id="win-next" class="primary-btn">Next →</button>
@@ -73,6 +76,32 @@
         <li>Every puzzle has <strong>one</strong> solution. Beat <strong>par</strong> for ★★★.</li>
       </ul>
       <p class="muted">A new puzzle drops daily. Same one for everyone.</p>
+    </div>
+  </div>
+
+  <!-- leaderboard -->
+  <div class="modal-backdrop" id="lb-modal" hidden>
+    <div class="lb-modal-inner" role="dialog" aria-modal="true" aria-labelledby="lb-title">
+      <button class="modal-close-x" id="lb-close" type="button" aria-label="Close">×</button>
+      <h2 id="lb-title">Leaderboard</h2>
+      <p class="lb-blurb">Ranked by stars first, then time — a clean 3-star beats a fast 2-star. Every solve counts.</p>
+      <div class="lb-scope-tabs" role="group" aria-label="Leaderboard scope">
+        <button class="lb-scope-tab active" data-scope="today" type="button">Today</button>
+        <button class="lb-scope-tab" data-scope="alltime" type="button">All-time</button>
+        <button class="lb-scope-tab" data-scope="you" type="button">You</button>
+      </div>
+      <div class="lb-diff-tabs" role="group" aria-label="Difficulty">
+        <button class="lb-diff-tab active" data-diff="easy" type="button">Easy</button>
+        <button class="lb-diff-tab" data-diff="medium" type="button">Medium</button>
+        <button class="lb-diff-tab" data-diff="hard" type="button">Hard</button>
+        <button class="lb-diff-tab" data-diff="total" type="button">Total</button>
+      </div>
+      <div class="lb-nav">
+        <button id="lb-prev" class="lb-nav-btn" type="button" aria-label="Previous day">‹</button>
+        <span id="lb-day-label">Today</span>
+        <button id="lb-next" class="lb-nav-btn" type="button" aria-label="Next day">›</button>
+      </div>
+      <div class="lb-body" id="lb-body"></div>
     </div>
   </div>
 
