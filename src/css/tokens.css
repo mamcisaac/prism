@@ -1,0 +1,136 @@
+/* ============================================================
+   Connect the Thoughts — design tokens (shared)
+   Source of truth for all games in the arcade. Each game vendors
+   a copy of this file into its own repo so it can deploy
+   independently. To bump the brand, update here and re-vendor.
+
+   How each game uses it:
+     1. <link rel="stylesheet" href="tokens.css"> before any other CSS
+        (or @import "./tokens.css" at the top of the main stylesheet)
+     2. Use the shared brand accent as-is — the daily arcade games
+        (ladder, mosaic, switchback, guess-the-date, the-dictionary-game)
+        do NOT override --accent: one cohesive accent across the arcade.
+        --on-accent is the text/icon colour that sits on top of --accent
+        (white in light mode; a dark teal in dark mode, where the accent is
+        light). Component styles use var(--on-accent).
+     3. Wire arcade.js for theme bootstrap + persistence
+        (key: localStorage["ctt.theme"] = "light" | "dark")
+
+   The legacy per-game tone vars below remain for non-daily games
+   (connect-the-thoughts, Cornerstone, kids' games) that still theme by tone.
+   ============================================================ */
+
+:root {
+    --bg: #f8fafc;
+    --bg-elev: #ffffff;
+    --fg: #0f172a;
+    --fg-muted: #475569;
+    --fg-subtle: #64748b;
+    --border: #e2e8f0;
+    --border-strong: #cbd5e1;
+    --accent: #0f766e;
+    --accent-hover: #115e59;
+    --on-accent: #ffffff;
+    --focus: #2563eb;
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
+    --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+    --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12), 0 4px 8px rgba(15, 23, 42, 0.05);
+    --radius-sm: 8px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
+
+    /* Per-game tones */
+    --tone-emerald-bg: #ecfdf5;
+    --tone-emerald-fg: #047857;
+    --tone-amber-bg: #fffbeb;
+    --tone-amber-fg: #b45309;
+    --tone-grass-bg: #f0fdf4;
+    --tone-grass-fg: #15803d;
+    --tone-sky-bg: #eff6ff;
+    --tone-sky-fg: #1d4ed8;
+    --tone-rose-bg: #fff1f2;
+    --tone-rose-fg: #be123c;
+    --tone-violet-bg: #f5f3ff;
+    --tone-violet-fg: #6d28d9;
+    --tone-indigo-bg: #eef2ff;
+    --tone-indigo-fg: #4338ca;
+    --tone-crimson-bg: #fef2f2;
+    --tone-crimson-fg: #b91c1c;
+    --tone-ochre-bg: #fffbeb;
+    --tone-ochre-fg: #a16207;
+    --tone-rust-bg: #fff7ed;
+    --tone-rust-fg: #c2410c;
+    --tone-teal-bg: #f0fdfa;
+    --tone-teal-fg: #0f766e;
+    --tone-gold-bg: #fefce8;
+    --tone-gold-fg: #ca8a04;
+    --tone-berry-bg: #fff1f5;
+    --tone-berry-fg: #9f1239;
+    --tone-purple-bg: #faf5ff;
+    --tone-purple-fg: #7c3aed;
+    --tone-cyan-bg: #ecfeff;
+    --tone-cyan-fg: #0891b2;
+    --tone-midnight-bg: #eef2ff;
+    --tone-midnight-fg: #1e3a8a;
+    --tone-slate-bg: #f1f5f9;
+    --tone-slate-fg: #475569;
+    --tone-plum-bg: #fdf4ff;
+    --tone-plum-fg: #86198f;
+
+    /* Type scale (use clamp() for fluid sizing where you need it) */
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+[data-theme="dark"] {
+    --bg: #0b1120;
+    --bg-elev: #131b2e;
+    --fg: #e2e8f0;
+    --fg-muted: #94a3b8;
+    --fg-subtle: #64748b;
+    --border: #1e293b;
+    --border-strong: #334155;
+    --accent: #5eead4;
+    --accent-hover: #2dd4bf;
+    --on-accent: #06302b;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+
+    --tone-emerald-bg: #022c22;
+    --tone-emerald-fg: #6ee7b7;
+    --tone-amber-bg: #2a1a04;
+    --tone-amber-fg: #fcd34d;
+    --tone-grass-bg: #052e16;
+    --tone-grass-fg: #86efac;
+    --tone-sky-bg: #0c1e3c;
+    --tone-sky-fg: #93c5fd;
+    --tone-rose-bg: #2a0a13;
+    --tone-rose-fg: #fda4af;
+    --tone-violet-bg: #1e1b3a;
+    --tone-violet-fg: #c4b5fd;
+    --tone-indigo-bg: #1e1b4b;
+    --tone-indigo-fg: #a5b4fc;
+    --tone-crimson-bg: #2a0a0a;
+    --tone-crimson-fg: #f87171;
+    --tone-ochre-bg: #2a2207;
+    --tone-ochre-fg: #eab308;
+    --tone-rust-bg: #2a1505;
+    --tone-rust-fg: #fb923c;
+    --tone-teal-bg: #042f2e;
+    --tone-teal-fg: #2dd4bf;
+    --tone-gold-bg: #2a2207;
+    --tone-gold-fg: #facc15;
+    --tone-berry-bg: #2a0a13;
+    --tone-berry-fg: #fb7185;
+    --tone-purple-bg: #1a1033;
+    --tone-purple-fg: #a78bfa;
+    --tone-cyan-bg: #083344;
+    --tone-cyan-fg: #22d3ee;
+    --tone-midnight-bg: #0a1733;
+    --tone-midnight-fg: #93c5fd;
+    --tone-slate-bg: #1e293b;
+    --tone-slate-fg: #94a3b8;
+    --tone-plum-bg: #2a0a2e;
+    --tone-plum-fg: #e9aefc;
+}

@@ -1,0 +1,64 @@
+# Build the Vite static bundle and publish it to GitHub Pages on every
+# push to master. One-time setup outside this file: in the repo's
+# Settings → Pages, set Source to "GitHub Actions". Once that's done,
+# merges to main auto-deploy to https://<user>.github.io/ladder/.
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Manual re-deploy from the Actions tab if needed (e.g. revert).
+  workflow_dispatch:
+
+# Pages deploys require these scopes; default GITHUB_TOKEN scopes are
+# read-only.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Serialize deploys — a queued run waits for the in-flight one to finish.
+# `cancel-in-progress: false` keeps an active deploy from being killed
+# mid-upload by a rapid second push.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ./dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

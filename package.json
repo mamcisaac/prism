@@ -1,0 +1,14 @@
+{
+  "name": "prism",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Rotate the optics until light blooms through every pane. Part of the Connect the Thoughts arcade.",
+  "scripts": {
+    "dev": "vite",
+    "selfcheck": "node scripts/selfcheck.mjs",
+    "build": "node scripts/selfcheck.mjs && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": { "vite": "^8.0.10" }
+}

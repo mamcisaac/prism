@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="description" content="Rotate the optics until light blooms through every pane. A daily light-routing puzzle from the Connect the Thoughts arcade." />
+  <meta name="theme-color" content="#0b1120" />
+  <title>Prism — Connect the Thoughts</title>
+  <link rel="icon" href="favicon.svg" />
+  <link rel="stylesheet" href="src/css/tokens.css" />
+  <link rel="stylesheet" href="src/css/game.css" />
+</head>
+<body>
+  <header class="chrome">
+    <a class="brand" href="https://connectthethoughts.ca/">
+      <span class="brand-mark">◈</span>
+      <span class="brand-text">Connect the Thoughts<span class="brand-game"> · Prism</span></span>
+    </a>
+    <div class="chrome-actions">
+      <span id="streak" class="streak"></span>
+      <button id="mute-btn" class="icon-btn" title="Mute">🔊</button>
+      <button id="help-btn" class="icon-btn" title="How to play">?</button>
+      <button id="theme-btn" class="icon-btn" title="Toggle dark mode">◐</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div class="topbar">
+      <div class="diffs" role="tablist">
+        <button class="diff-btn" data-diff="easy">Easy</button>
+        <button class="diff-btn" data-diff="medium">Medium</button>
+        <button class="diff-btn" data-diff="hard">Hard</button>
+      </div>
+      <button id="new-btn" class="ghost-btn">New ↻</button>
+    </div>
+
+    <p class="goal">Rotate mirrors so light reaches <strong>every pane</strong>. <span id="mode-label" class="mode-label"></span></p>
+
+    <div class="board-wrap">
+      <canvas id="board"></canvas>
+    </div>
+
+    <div class="hud">
+      <div class="stat"><span class="stat-num" id="panecount">0/0</span><span class="stat-cap">panes lit</span></div>
+      <div class="stat"><span class="stat-num" id="moves">0</span><span class="stat-cap">moves</span></div>
+      <div class="stat"><span class="stat-num" id="par">0</span><span class="stat-cap">par</span></div>
+    </div>
+  </main>
+
+  <!-- win overlay -->
+  <div id="win" class="overlay" data-close>
+    <div class="overlay-card">
+      <div class="win-stars">★★★</div>
+      <div class="win-line"></div>
+      <div class="win-sub"></div>
+      <div class="overlay-btns">
+        <button id="win-share" class="ghost-btn">Share</button>
+        <button id="win-next" class="primary-btn">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- help -->
+  <div id="help" class="modal" data-close>
+    <div class="modal-card">
+      <button class="modal-x" data-close>×</button>
+      <h2>Prism</h2>
+      <p>A beam of light enters the panel. <strong>Tap a mirror</strong> to flip it between <code>/</code> and <code>\</code> — the whole beam re-routes.</p>
+      <p>Goal: light up <strong>every pane</strong> (the diamonds). On Hard, a pane must get its <strong>exact colour</strong> — mix beams to make it.</p>
+      <ul>
+        <li>Dim mirrors are <strong>fixed</strong> — they shape the light but you can't move them.</li>
+        <li>As panes settle, the mirrors feeding them <strong>frost over</strong> — that part is done.</li>
+        <li>Every puzzle has <strong>one</strong> solution. Beat <strong>par</strong> for ★★★.</li>
+      </ul>
+      <p class="muted">A new puzzle drops daily. Same one for everyone.</p>
+    </div>
+  </div>
+
+  <script type="module" src="src/game.js"></script>
+</body>
+</html>
