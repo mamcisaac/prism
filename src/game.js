@@ -33,9 +33,10 @@ let stats = loadStats();
 function recordSolve(diff, isDaily) {
   if (!isDaily) return;
   const day = todayStr();
-  stats.solves++;
   const key = day + '|' + diff;
-  if (!stats.done[key]) stats.done[key] = true;
+  if (stats.done[key]) return; // already counted this daily — don't inflate on replay
+  stats.done[key] = true;
+  stats.solves++;
   // streak = consecutive days with at least one daily solve
   if (stats.lastDay !== day) {
     const y = new Date(); y.setUTCDate(y.getUTCDate() - 1);
@@ -136,7 +137,7 @@ function render(instant) {
       if (ok) { const g = glow(c.need || got || 7); ctx.fillStyle = g; ctx.shadowColor = g; ctx.shadowBlur = 18; roundRect(ctx, -sz / 2, -sz / 2, sz, sz, 4); ctx.fill(); }
       else { ctx.strokeStyle = got ? css.getPropertyValue('--warn').trim() : fg; ctx.globalAlpha = got ? 0.95 : 0.5; ctx.lineWidth = 2.5; roundRect(ctx, -sz / 2, -sz / 2, sz, sz, 4); ctx.stroke(); }
       ctx.restore();
-      if (c.need && c.need !== 7) { ctx.fillStyle = fg; ctx.globalAlpha = 0.8; ctx.font = `600 ${Math.round(cell * 0.22)}px var(--font-mono,monospace)`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(colorGlyph(c.need), X, Y); ctx.globalAlpha = 1; }
+      if (c.need && c.need !== 7) { ctx.fillStyle = fg; ctx.globalAlpha = 0.8; ctx.font = `600 ${Math.round(cell * 0.22)}px ui-monospace, SFMono-Regular, Menlo, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(colorGlyph(c.need), X, Y); ctx.globalAlpha = 1; }
     } else { // mirror / splitter
       const fixed = c.fixed, lk = locked.has(i);
       ctx.strokeStyle = fixed ? css.getPropertyValue('--fg-subtle').trim() : css.getPropertyValue('--accent').trim();
@@ -228,7 +229,11 @@ function chime(freq, gain = 0.4) {
 
 // ---- chrome wiring ----
 function syncChrome() {
-  document.querySelectorAll('.diff-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.diff === state.diff && state.isDaily));
+  const day = todayStr();
+  document.querySelectorAll('.diff-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.diff === state.diff && state.isDaily);
+    btn.classList.toggle('done', !!stats.done[day + '|' + btn.dataset.diff]); // ★ on dailies cleared today
+  });
   document.getElementById('mode-label').textContent = state.isDaily ? `${DIFF_LABEL[state.diff]} · today` : 'Random';
   document.getElementById('streak').textContent = stats.streak ? `🔆 ${stats.streak}` : '';
 }
