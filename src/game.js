@@ -55,10 +55,46 @@ const doneToday = (diff) => loadHistory(GAME_SLUG).some((h) => h.date === todayS
 let state = null;  // { diff, isDaily, board, par, moves, finished }
 let cell = 48, pad = 18;
 
+// ---- pause the solve clock while a help/tutorial overlay is open ----
+// Time only matters at win() (timeMs = Date.now() - state.startMs, submitted as
+// the leaderboard tiebreak). There is no live ticking timer, so pausing simply
+// shifts state.startMs FORWARD by however long an overlay was open — the elapsed
+// time then excludes any seconds spent reading Help / the first-play tutorial.
+let pausedAt = 0;
+function isShown(el) {
+  if (!el) return false;
+  if (el.hasAttribute('hidden')) return false;
+  const st = el.style;
+  if (st && (st.display === 'none' || st.visibility === 'hidden')) return false;
+  // this game's modals toggle a `.show` class rather than the hidden attribute
+  if (el.classList.contains('modal') || el.classList.contains('overlay')) return el.classList.contains('show');
+  return true;
+}
+function overlayOpen() {
+  return isShown(document.getElementById('tutorial-modal'))
+    || isShown(document.getElementById('help-modal'))
+    || isShown(document.getElementById('help'));
+}
+function pauseClock() {
+  if (pausedAt || !(state && state.startMs)) return;
+  pausedAt = Date.now();
+}
+function resumeClock() {
+  if (!pausedAt) return;
+  const dt = Date.now() - pausedAt;
+  pausedAt = 0;
+  if (state && state.startMs) state.startMs += dt;
+}
+function syncClock() { overlayOpen() ? pauseClock() : resumeClock(); }
+document.addEventListener('arcade:tutorial', syncClock);
+window._clockState = () => ({ startMs: state && state.startMs, pausedAt });
+
 function newGame(diff, isDaily) {
   const seed = isDaily ? dailySeed(diff) : (mulberry32((Date.now() ^ (Math.random() * 1e9)) >>> 0)() * 4294967296) >>> 0;
   const g = generateBoard(seed, diff);
   state = { diff, isDaily, board: g.board, par: g.par, moves: 0, finished: false, seed, startMs: Date.now() };
+  pausedAt = 0;
+  syncClock(); // if a first-play tutorial / help is already open, pause the just-started clock
   const li = document.getElementById('lb-inline'); if (li) li.innerHTML = '';
   layout();
   render(true);
@@ -316,6 +352,8 @@ function boot() {
   document.getElementById('new-btn').addEventListener('click', () => { document.getElementById('win').classList.remove('show'); newGame(state.diff, false); });
   document.getElementById('theme-btn').addEventListener('click', toggleTheme);
   document.getElementById('help-btn').addEventListener('click', () => document.getElementById('help').classList.add('show'));
+  // pause/resume the solve clock whenever the help overlay opens or closes
+  ['help-modal', 'help'].forEach((id) => { const h = document.getElementById(id); if (h) new MutationObserver(syncClock).observe(h, { attributes: true, attributeFilter: ['hidden', 'style', 'class'] }); });
   document.getElementById('mute-btn').addEventListener('click', (e) => { muted = !muted; e.currentTarget.textContent = muted ? '🔇' : '🔊'; });
   document.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', (e) => { if (e.target === el || e.target.hasAttribute('data-close')) el.closest('.modal,.overlay').classList.remove('show'); }));
   document.getElementById('win-share').addEventListener('click', async () => {
