@@ -47,7 +47,13 @@ export function createLeaderboardModal(config) {
     // Single-board mode (omit `difficulties`): one daily board, no diff tabs.
     alltimeKey = 'daily', youKey = 'daily', youLabel = 'Daily',
     youHeadSingle = 'Your daily best',
+    // Raw-metric games (moves/attempts/steps/clues/closeness) rank without a
+    // star tier: hide the stars column. `alltimeVersion` picks a fresh all-time
+    // board when a game's score meaning changed. `bestComparator(candidate,
+    // current)` orders the "You" bests by the game's own metric.
+    showStars = true, alltimeVersion = 1, bestComparator,
   } = config;
+  const starsCol = (n) => showStars ? `<span class="lb-stars">${starsHtml(n)}</span>` : '';
   // Games without difficulty tiers (e.g. verdict, doublet-cross) run a single
   // daily board: no diff tabs, no "· <diff>" suffix, one row in "You".
   const single = !difficulties;
@@ -72,7 +78,7 @@ export function createLeaderboardModal(config) {
       return `<li class="lb-row${isMe ? ' me' : ''}">` +
         `<span class="lb-rank">${i + 1}</span>` +
         `<span class="lb-name">${escapeHtml(r.handle)}</span>` +
-        `<span class="lb-stars">${starsHtml(parts.stars)}</span>` +
+        starsCol(parts.stars) +
         `<span class="lb-score">${rowStat(r)}</span>` +
         `</li>`;
     }).join('');
@@ -88,16 +94,16 @@ export function createLeaderboardModal(config) {
   // every leaderboard game, so the arcade can't drift on what "your stats" means.
   function renderYou() {
     const body = document.getElementById('lb-body');
-    const best = personalBests(gameSlug);
+    const best = personalBests(gameSlug, bestComparator);
     let bests;
     if (single) {
       const d = best[youKey];
       bests = d
-        ? `<div class="lb-you-head">${youHeadSingle}</div><ol class="lb-list"><li class="lb-row"><span class="lb-name">${youLabel}</span><span class="lb-stars">${starsHtml(d.stars)}</span><span class="lb-score">${youRow(d)}</span></li></ol>`
+        ? `<div class="lb-you-head">${youHeadSingle}</div><ol class="lb-list"><li class="lb-row"><span class="lb-name">${youLabel}</span>${starsCol(d.stars)}<span class="lb-score">${youRow(d)}</span></li></ol>`
         : '';
     } else {
       const rows = youOrder.filter(d => best[d]).map(d =>
-        `<li class="lb-row"><span class="lb-name">${diffLabel[d]}</span><span class="lb-stars">${starsHtml(best[d].stars)}</span><span class="lb-score">${youRow(best[d], d)}</span></li>`
+        `<li class="lb-row"><span class="lb-name">${diffLabel[d]}</span>${starsCol(best[d].stars)}<span class="lb-score">${youRow(best[d], d)}</span></li>`
       ).join('');
       bests = rows ? `<div class="lb-you-head">${youHead}</div><ol class="lb-list">${rows}</ol>` : '';
     }
@@ -117,8 +123,8 @@ export function createLeaderboardModal(config) {
     if (nav) nav.style.display = (isYou || isAll) ? 'none' : '';
     if (isYou) { document.getElementById('lb-day-label').textContent = 'Your bests'; renderYou(); return; }
     const board = single
-      ? (isAll ? alltimeBoard(alltimeKey) : boardKeyForOffset(lbOffset))
-      : (isAll ? alltimeBoard(d) : boardKeyForOffset(lbOffset, d));
+      ? (isAll ? alltimeBoard(alltimeKey, alltimeVersion) : boardKeyForOffset(lbOffset))
+      : (isAll ? alltimeBoard(d, alltimeVersion) : boardKeyForOffset(lbOffset, d));
     renderBoard(document.getElementById('lb-body'), board, getHandle() || null);
     const dayPart = isAll ? 'All-time' : dayLabelForOffset(lbOffset);
     document.getElementById('lb-day-label').textContent = single ? dayPart : dayPart + ' · ' + diffLabel[d];
