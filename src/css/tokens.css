@@ -134,3 +134,22 @@
     --tone-plum-bg: #2a0a2e;
     --tone-plum-fg: #e9aefc;
 }
+
+/* ── Base interaction reset (arcade-wide) ────────────────────────
+   Kill the mobile double-tap-to-zoom gesture everywhere. Our games are
+   rapid-tap (mash Undo, tap a piece then tap its target); a stray quick
+   double-tap must never zoom/pan the page. This lives in tokens.css on
+   purpose: it is the ONE shared stylesheet every game loads, and it loads
+   first, so the guard applies before any game CSS.
+
+   Universal selector by design: `touch-action` does NOT inherit and defaults
+   to `auto` per element, so scoping it to interactive classes leaves the gaps
+   un-guarded — non-interactive children (labels, counters, board gaps,
+   beads/tiles) still trigger double-tap zoom when tapped. `*` closes every
+   gap. `manipulation` keeps scrolling + pinch-zoom (accessibility) and only
+   drops the double-tap gesture; no arcade game uses double-tap as an input.
+   Specificity is (0,0,0), so any drag surface that must own its gestures
+   (`.dial`, `.wc-grid-wrap`, `.sim`, the path board — all `touch-action:
+   none`) overrides it via its class selector. `-webkit-tap-highlight-color`
+   drops the grey iOS tap flash for a native, app-like feel. */
+* { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
