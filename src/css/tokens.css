@@ -13,7 +13,7 @@
         --on-accent is the text/icon colour that sits on top of --accent
         (white in light mode; a dark teal in dark mode, where the accent is
         light). Component styles use var(--on-accent).
-     3. Wire arcade.js for theme bootstrap + persistence
+     3. Wire arcade-theme.js for theme bootstrap + persistence
         (key: localStorage["ctt.theme"] = "light" | "dark")
 
    The legacy per-game tone vars below remain for non-daily games
