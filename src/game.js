@@ -18,10 +18,13 @@ const DIFF_LABEL = { easy: 'Easy', medium: 'Medium', hard: 'Hard', total: 'Total
 const GLOW = { 1: '#ff5d5d', 2: '#54e08a', 4: '#5b9bff', 3: '#ffd24a', 5: '#ff6dd0', 6: '#4fe3e8', 7: '#fff2bf' };
 const glow = (c) => GLOW[c] || '#fff2bf';
 
-// ---- daily seeding (UTC date, like the rest of the arcade) ----
+// ---- daily seeding (LOCAL date, like the rest of the arcade) ----
+// Seed off the player's local calendar day so the puzzle, the board key, and the
+// shared client's now-local todayStr all share one date basis — a UTC seed here
+// would drift onto the next local day's puzzle/board in the evening.
 function dailySeed(diff) {
   const d = new Date();
-  const base = d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+  const base = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
   const off = { easy: 1, medium: 2, hard: 3 }[diff];
   return ((base * 2654435761) ^ (off * 0x9e3779b9)) >>> 0;
 }
@@ -44,9 +47,9 @@ function recordRunResult(diff, st, timeMs, moves) { const r = loadRun(); if (!r.
 
 // ---- leaderboard board keys (daily board + day navigation) ----
 const curDiff = () => (state ? state.diff : 'easy');
-function boardKeyForOffset(offset, diff) { const d = new Date(); d.setUTCDate(d.getUTCDate() - offset); const base = d.getUTCFullYear() + '-' + (d.getUTCMonth() + 1) + '-' + d.getUTCDate(); return base + '|' + (diff || curDiff()); }
+function boardKeyForOffset(offset, diff) { const d = new Date(); d.setDate(d.getDate() - offset); const base = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); return base + '|' + (diff || curDiff()); }
 function totalBoardKey() { return todayStr() + '|total'; }
-function dayLabelForOffset(offset) { if (offset === 0) return 'Today'; if (offset === 1) return 'Yesterday'; const d = new Date(); d.setUTCDate(d.getUTCDate() - offset); return d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' }); }
+function dayLabelForOffset(offset) { if (offset === 0) return 'Today'; if (offset === 1) return 'Yesterday'; const d = new Date(); d.setDate(d.getDate() - offset); return d.toLocaleDateString('en', { month: 'short', day: 'numeric' }); }
 
 function starCount(moves, par) { const over = moves - par; return over <= 0 ? 3 : over <= 2 ? 2 : over <= 4 ? 1 : 0; }
 const doneToday = (diff) => loadHistory(GAME_SLUG).some((h) => h.date === todayStr() && h.difficulty === diff);
