@@ -149,12 +149,20 @@
   line-height: 1;
   margin-bottom: 4px;
 }
-.results-time {
+.results-time,
+.results-stat {
   font-size: 28px;
   font-weight: 700;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
   margin-bottom: 2px;
+}
+/* The primary metric line may carry a small unit (e.g. "42<small>strokes</small>"). */
+.results-stat small {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  margin-left: 4px;
 }
 .results-sub {
   font-size: 13px;
