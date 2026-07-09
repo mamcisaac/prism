@@ -108,7 +108,7 @@ export function createLeaderboardModal(config) {
       bests = rows ? `<div class="lb-you-head">${youHead}</div><ol class="lb-list">${rows}</ol>` : '';
     }
     const st = historyStats(gameSlug);
-    const stats = historyStatsHtml(gameSlug);
+    const stats = historyStatsHtml(gameSlug, showStars);
     const note = st.solves
       ? `<div class="lb-status">${st.solves} solve${st.solves === 1 ? '' : 's'} recorded on this device.</div>`
       : `<div class="lb-status">No solves yet — finish today's daily to start your record.</div>`;
