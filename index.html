@@ -10,21 +10,61 @@
   <link rel="stylesheet" href="src/css/tokens.css" />
   <link rel="stylesheet" href="src/css/arcade-components.css" />
   <link rel="stylesheet" href="src/css/game.css" />
+  <script>
+    (function () {
+      try {
+        var url = new URLSearchParams(location.search).get('theme');
+        if (url === 'dark' || url === 'light') localStorage.setItem('ctt.theme', url);
+      } catch (_) {}
+      var s = null;
+      try { s = localStorage.getItem('ctt.theme'); } catch (_) {}
+      document.documentElement.setAttribute('data-theme', s || 'dark');
+    })();
+  </script>
+  <script src="/arcade-theme.js"></script>
 </head>
 <body>
-  <header class="chrome">
-    <a class="brand" href="https://connectthethoughts.ca/">
-      <span class="brand-mark">◈</span>
-      <span class="brand-text">Connect the Thoughts<span class="brand-game"> · Prism</span></span>
-    </a>
-    <div class="chrome-actions">
-      <span id="streak" class="streak"></span>
-      <button id="lbButton" class="icon-btn" title="Leaderboard">🏆</button>
-      <button id="mute-btn" class="icon-btn" title="Mute">🔊</button>
-      <button id="help-btn" class="icon-btn" title="How to play">?</button>
-      <button id="theme-btn" class="icon-btn" title="Toggle dark mode">◐</button>
-    </div>
-  </header>
+  <!-- arcade:topbar:start -->
+<header class="topbar">
+  <a class="brand" href="https://connectthethoughts.ca/" aria-label="Connect the Thoughts — arcade home">
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="7" cy="8" r="2.5"/><circle cx="25" cy="8" r="2.5"/>
+        <circle cx="7" cy="24" r="2.5"/><circle cx="25" cy="24" r="2.5"/>
+        <path d="M9.5 8 L22.5 8 M9.5 24 L22.5 24 M7 10.5 L7 21.5 M25 10.5 L25 21.5 M9 10 L23 22"/>
+      </svg>
+    </span>
+    <span class="brand-text">Connect the Thoughts</span>
+    <span class="brand-sep" aria-hidden="true">·</span>
+    <span class="brand-game">Prism</span>
+  </a>
+  <div class="topbar-actions">
+    <button id="archive-button" class="icon-button" type="button" aria-label="Past daily puzzles" title="Past daily puzzles" data-arcade-archive hidden>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+    </button>
+    <button id="lbButton" class="icon-button" type="button" aria-label="Leaderboard" title="Leaderboard" data-arcade-leaderboard>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+      </svg>
+    </button>
+    <button id="themeToggle" class="icon-button" type="button" aria-label="Toggle dark mode" title="Toggle dark mode" aria-pressed="false" data-arcade-theme-toggle>
+      <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+      </svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    </button>
+    <button id="helpButton" class="icon-button" type="button" aria-label="How to play" title="How to play" data-arcade-help>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"/><path d="M9.5 9a2.5 2.5 0 1 1 4.4 1.6c-.7.7-1.4 1-1.9 1.6-.3.4-.5 1-.5 1.8"/><circle cx="12" cy="17.5" r="0.6" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
+</header>
+<!-- arcade:topbar:end -->
 
   <main class="stage">
     <div class="topbar">
@@ -33,7 +73,11 @@
         <button class="diff-btn" data-diff="medium">Medium</button>
         <button class="diff-btn" data-diff="hard">Hard</button>
       </div>
-      <button id="new-btn" class="ghost-btn">New ↻</button>
+      <div class="topbar-right">
+        <span id="streak" class="streak"></span>
+        <button id="mute-btn" class="ghost-btn" aria-label="Toggle sound">🔊</button>
+        <button id="new-btn" class="ghost-btn">New ↻</button>
+      </div>
     </div>
 
     <p class="goal">Rotate mirrors so light reaches <strong>every pane</strong>. <span id="mode-label" class="mode-label"></span></p>
@@ -52,7 +96,6 @@
   <!-- win overlay -->
   <div id="win" class="overlay" data-close>
     <div class="overlay-card">
-      <div class="win-stars">★★★</div>
       <div class="win-line"></div>
       <div class="win-sub"></div>
       <div id="lb-inline" class="lb-inline"></div>
@@ -73,7 +116,7 @@
       <ul>
         <li>Dim mirrors are <strong>fixed</strong> — they shape the light but you can't move them.</li>
         <li>As panes settle, the mirrors feeding them <strong>frost over</strong> — that part is done.</li>
-        <li>Every puzzle has <strong>one</strong> solution. Beat <strong>par</strong> for ★★★.</li>
+        <li>Every puzzle has <strong>one</strong> solution. Beat <strong>par</strong> for a clean solve.</li>
       </ul>
       <p class="muted">A new puzzle drops daily. Same one for everyone.</p>
     </div>
@@ -84,7 +127,7 @@
     <div class="lb-modal-inner" role="dialog" aria-modal="true" aria-labelledby="lb-title">
       <button class="modal-close-x" id="lb-close" type="button" aria-label="Close">×</button>
       <h2 id="lb-title">Leaderboard</h2>
-      <p class="lb-blurb">Ranked by stars first, then time — a clean 3-star beats a fast 2-star. Every solve counts.</p>
+      <p class="lb-blurb">Ranked by moves over par, then time. Every solve counts.</p>
       <div class="lb-scope-tabs" role="group" aria-label="Leaderboard scope">
         <button class="lb-scope-tab active" data-scope="today" type="button">Today</button>
         <button class="lb-scope-tab" data-scope="alltime" type="button">All-time</button>

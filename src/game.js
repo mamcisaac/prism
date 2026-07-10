@@ -5,10 +5,12 @@
 import { generateBoard, mulberry32 } from './generate.js';
 import { trace, lockedSet, rotatableIndices, ALT_ORIENT, xy, idx } from './engine.js';
 import {
-  isLeaderboardConfigured, submitScore, submitCompletion, compositeScore, alltimeBoard,
-  cleanHandle, starsHtml, formatTime, rowParts, recordHistory, historyStats, loadHistory, reportStats, todayStr,
+  isLeaderboardConfigured, submitScore, submitMetricCompletion, alltimeBoard,
+  cleanHandle, formatTime, rowParts, recordHistory, historyStats, loadHistory, reportStats, todayStr,
 } from './arcade-leaderboard.js';
 import { createLeaderboardModal } from './arcade-leaderboard-ui.js';
+import { dailyDateKey } from './arcade-daily-seed.js';
+import { createArchive } from './arcade-archive.js';
 
 const GAME_SLUG = 'prism';
 const DIFFS = ['easy', 'medium', 'hard'];
@@ -19,12 +21,13 @@ const GLOW = { 1: '#ff5d5d', 2: '#54e08a', 4: '#5b9bff', 3: '#ffd24a', 5: '#ff6d
 const glow = (c) => GLOW[c] || '#fff2bf';
 
 // ---- daily seeding (LOCAL date, like the rest of the arcade) ----
-// Seed off the player's local calendar day so the puzzle, the board key, and the
-// shared client's now-local todayStr all share one date basis — a UTC seed here
-// would drift onto the next local day's puzzle/board in the evening.
+// Seed off the shared daily date key so the puzzle, the board key, and the
+// shared client's local date all share one basis. dailyDateKey() honors
+// window.__archiveDateKey, so an archived day replays byte-identically while
+// today's key ('YYYY-M-D', 1-based month) reproduces the historical seed exactly.
 function dailySeed(diff) {
-  const d = new Date();
-  const base = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  const p = dailyDateKey().split('-').map(Number);
+  const base = p[0] * 10000 + p[1] * 100 + p[2];
   const off = { easy: 1, medium: 2, hard: 3 }[diff];
   return ((base * 2654435761) ^ (off * 0x9e3779b9)) >>> 0;
 }
@@ -34,7 +37,7 @@ const HKEY = 'ctt.prism.handle';
 function loadHandle() { try { return localStorage.getItem(HKEY) || ''; } catch (_) { return ''; } }
 function saveHandle(h) { try { localStorage.setItem(HKEY, h); } catch (_) {} }
 let lbHandle = loadHandle();
-const BKEY = 'ctt.prism.bests';
+const BKEY = 'ctt.prism.bests2';
 function loadBests() { try { return JSON.parse(localStorage.getItem(BKEY)) || {}; } catch (_) { return {}; } }
 function saveBests(b) { try { localStorage.setItem(BKEY, JSON.stringify(b)); } catch (_) {} }
 let bests = loadBests();
@@ -43,15 +46,17 @@ let bests = loadBests();
 const RKEY = 'ctt.prism.run';
 function loadRun() { try { const r = JSON.parse(localStorage.getItem(RKEY)); if (r && r.date === todayStr()) return r; } catch (_) {} return { date: todayStr(), results: {} }; }
 function saveRun(r) { try { localStorage.setItem(RKEY, JSON.stringify(r)); } catch (_) {} }
-function recordRunResult(diff, st, timeMs, moves) { const r = loadRun(); if (!r.results[diff]) { r.results[diff] = { stars: st, timeMs, moves }; saveRun(r); } return loadRun(); }
+function recordRunResult(diff, timeMs, moves, par) { const r = loadRun(); if (!r.results[diff]) { r.results[diff] = { timeMs, moves, par }; saveRun(r); } return loadRun(); }
 
 // ---- leaderboard board keys (daily board + day navigation) ----
+// Anchored on dailyDateKey() (today, or the archived day being replayed) so a
+// replay's win panel + board navigation reflect that day; for real today the
+// key is byte-identical to the old todayStr()-based keys.
 const curDiff = () => (state ? state.diff : 'easy');
-function boardKeyForOffset(offset, diff) { const d = new Date(); d.setDate(d.getDate() - offset); const base = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); return base + '|' + (diff || curDiff()); }
-function totalBoardKey() { return todayStr() + '|total'; }
+function boardKeyForOffset(offset, diff) { const p = dailyDateKey().split('-').map(Number); const d = new Date(p[0], p[1] - 1, p[2]); d.setDate(d.getDate() - offset); const base = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); return base + '|' + (diff || curDiff()); }
+function totalBoardKey() { return dailyDateKey() + '|total'; }
 function dayLabelForOffset(offset) { if (offset === 0) return 'Today'; if (offset === 1) return 'Yesterday'; const d = new Date(); d.setDate(d.getDate() - offset); return d.toLocaleDateString('en', { month: 'short', day: 'numeric' }); }
 
-function starCount(moves, par) { const over = moves - par; return over <= 0 ? 3 : over <= 2 ? 2 : over <= 4 ? 1 : 0; }
 const doneToday = (diff) => loadHistory(GAME_SLUG).some((h) => h.date === todayStr() && h.difficulty === diff);
 
 // ---- game state ----
@@ -234,53 +239,58 @@ function onClick(ev) {
 function win() {
   state.finished = true;
   const timeMs = Date.now() - state.startMs;
-  const st = starCount(state.moves, state.par);
+  const dateKey = dailyDateKey();
+  const isRealToday = dateKey === todayStr();
+  // Metric = moves over par (primary) with time as a sub-metric tiebreak.
+  const value = Math.max(0, state.moves - state.par) * 1e7 + Math.min(timeMs, 1e7 - 1);
   let firstAttempt = false, run = null;
   if (state.isDaily) {
-    firstAttempt = !loadRun().results[state.diff];
-    recordHistory(GAME_SLUG, { difficulty: state.diff, stars: st, timeMs, moves: state.moves, date: todayStr() });
+    // First solve of THIS day+difficulty (archive-safe: keyed off the replayed date).
+    firstAttempt = !loadHistory(GAME_SLUG).some((h) => h.date === dateKey && h.difficulty === state.diff);
+    recordHistory(GAME_SLUG, { difficulty: state.diff, value, moves: state.moves, par: state.par, timeMs, date: dateKey });
     reportStats(GAME_SLUG);
-    run = recordRunResult(state.diff, st, timeMs, state.moves);
+    // The combined Total board tracks a single real-today run; archived replays
+    // don't feed it (they submit to their own dated board only).
+    if (isRealToday) run = recordRunResult(state.diff, timeMs, state.moves, state.par);
   }
   bloomUntil = performance.now() + 900; chime(680, 0.6); setTimeout(() => chime(880, 0.6), 90); setTimeout(() => chime(1100, 0.7), 180);
   render();
   const ov = document.getElementById('win');
-  ov.querySelector('.win-stars').textContent = starsHtml(st);
   ov.querySelector('.win-line').textContent = `Solved in ${state.moves} ${state.moves === 1 ? 'move' : 'moves'} · par ${state.par}`;
   ov.querySelector('.win-sub').textContent = state.isDaily ? `${DIFF_LABEL[state.diff]} daily · ${formatTime(timeMs)}` : 'Random puzzle';
-  renderWinLeaderboard(document.getElementById('lb-inline'), st, timeMs, run, firstAttempt);
+  renderWinLeaderboard(document.getElementById('lb-inline'), value, timeMs, run, firstAttempt);
   ov.classList.add('show');
   syncChrome();
 }
 
 // Post-win panel: submit the first daily attempt (prompting for a name once),
 // then show the standing board. Mirrors the other arcade dailies.
-function renderWinLeaderboard(mount, st, timeMs, run, firstAttempt) {
+function renderWinLeaderboard(mount, value, timeMs, run, firstAttempt) {
   if (!mount) return;
   mount.innerHTML = '';
   if (!isLeaderboardConfigured()) return;
   if (!state.isDaily) { mount.innerHTML = '<div class="lb-hint">Switch to a daily to join the leaderboard.</div>'; return; }
   const board = boardKeyForOffset(0, state.diff);
   if (!firstAttempt) { lbUi.renderBoard(mount, board, lbHandle || null); return; }
-  const composite = compositeScore(st, timeMs);
 
   async function doSubmit(name) {
-    if (bests[board] !== undefined && composite >= bests[board]) { lbUi.renderBoard(mount, board, name); return; }
+    if (bests[board] !== undefined && value >= bests[board]) { lbUi.renderBoard(mount, board, name); return; }
     mount.innerHTML = '<div class="lb-status">Submitting…</div>';
-    const ok = await submitCompletion({ game: GAME_SLUG, difficulty: state.diff, stars: st, tiebreakMs: timeMs, handle: name, board, meta: { moves: state.moves, par: state.par } });
-    if (ok) { bests[board] = composite; saveBests(bests); }
+    const ok = await submitMetricCompletion({ game: GAME_SLUG, difficulty: state.diff, value, handle: name, board, meta: { moves: state.moves, par: state.par, timeMs } });
+    if (ok) { bests[board] = value; saveBests(bests); }
     else if (bests[board] === undefined) { mount.innerHTML = '<div class="lb-status">Couldn\'t reach the leaderboard — your solve is saved under “You”.</div>'; return; }
     lbUi.renderBoard(mount, board, name);
     if (run && DIFFS.every((d) => run.results[d])) { // combined Total board once all three are done
+      const totalValue = DIFFS.reduce((s, d) => s + Math.max(0, run.results[d].moves - run.results[d].par) * 1e7, 0)
+        + DIFFS.reduce((s, d) => s + run.results[d].timeMs, 0);
       const totalTime = DIFFS.reduce((s, d) => s + run.results[d].timeMs, 0);
-      const totalStars = Math.min(...DIFFS.map((d) => run.results[d].stars));
       const totalMoves = DIFFS.reduce((s, d) => s + run.results[d].moves, 0);
-      const tBoard = totalBoardKey(), tComp = compositeScore(totalStars, totalTime);
-      if (bests[tBoard] === undefined || tComp < bests[tBoard]) {
-        const meta = { stars: totalStars, timeMs: totalTime, moves: totalMoves, difficulty: 'total' };
-        const a = await submitScore({ game: GAME_SLUG, board: tBoard, handle: name, score: tComp, meta });
-        const b = await submitScore({ game: GAME_SLUG, board: alltimeBoard('total'), handle: name, score: tComp, meta });
-        if (a || b) { bests[tBoard] = tComp; saveBests(bests); }
+      const tBoard = totalBoardKey();
+      if (bests[tBoard] === undefined || totalValue < bests[tBoard]) {
+        const meta = { moves: totalMoves, timeMs: totalTime, difficulty: 'total' };
+        const a = await submitScore({ game: GAME_SLUG, board: tBoard, handle: name, score: totalValue, meta });
+        const b = await submitScore({ game: GAME_SLUG, board: alltimeBoard('total', 2), handle: name, score: totalValue, meta });
+        if (a || b) { bests[tBoard] = totalValue; saveBests(bests); }
       }
     }
   }
@@ -304,9 +314,8 @@ const lbUi = createLeaderboardModal({
 });
 
 function shareText() {
-  const st = starCount(state.moves, state.par);
-  const tag = state.isDaily ? `${todayStr()} · ${DIFF_LABEL[state.diff]}` : 'Random';
-  return `Prism ✦ ${tag}\nSolved in ${state.moves} (par ${state.par}) ${starsHtml(st)}\nconnectthethoughts.ca/prism`;
+  const tag = state.isDaily ? `${dailyDateKey()} · ${DIFF_LABEL[state.diff]}` : 'Random';
+  return `Prism · ${tag}\nSolved in ${state.moves} (par ${state.par})\nconnectthethoughts.ca/prism`;
 }
 
 // ---- gentle WebAudio chime (many-small-completions juice) ----
@@ -329,35 +338,31 @@ function chime(freq, gain = 0.4) {
 function syncChrome() {
   document.querySelectorAll('.diff-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.diff === state.diff && state.isDaily);
-    btn.classList.toggle('done', doneToday(btn.dataset.diff)); // ★ on dailies cleared today
+    btn.classList.toggle('done', doneToday(btn.dataset.diff)); // check mark on dailies cleared today
   });
   document.getElementById('mode-label').textContent = state.isDaily ? `${DIFF_LABEL[state.diff]} · today` : 'Random';
-  const cur = historyStats(GAME_SLUG).currentStreak;
-  document.getElementById('streak').textContent = cur ? `🔆 ${cur}` : '';
-}
-
-function initTheme() {
-  let th; try { th = localStorage.getItem('ctt.theme'); } catch (_) {}
-  document.documentElement.setAttribute('data-theme', th || 'dark');
-}
-function toggleTheme() {
-  const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', cur);
-  try { localStorage.setItem('ctt.theme', cur); } catch (_) {}
-  render();
+  const streakEl = document.getElementById('streak');
+  if (streakEl) { const cur = historyStats(GAME_SLUG).currentStreak; streakEl.textContent = cur ? `🔆 ${cur}` : ''; }
 }
 
 function boot() {
-  initTheme();
+  // theme bootstrap + toggle handled by the vended arcade-theme.js (#themeToggle)
   lbUi.wire();
+  createArchive({
+    isDayDone: (key) => loadHistory(GAME_SLUG).some((h) => h.date === key),
+    loadDailyForDate: (key) => { window.__archiveDateKey = key; document.getElementById('win').classList.remove('show'); newGame(state ? state.diff : 'easy', true); },
+  }).wire();
+  // canvas colours come from CSS vars — re-render when the shared toggle flips theme
+  document.addEventListener('arcade:themechange', () => { if (state) render(); });
   canvas().addEventListener('click', onClick);
-  document.querySelectorAll('.diff-btn').forEach((btn) => btn.addEventListener('click', () => { document.getElementById('win').classList.remove('show'); newGame(btn.dataset.diff, true); }));
-  document.getElementById('new-btn').addEventListener('click', () => { document.getElementById('win').classList.remove('show'); newGame(state.diff, false); });
-  document.getElementById('theme-btn').addEventListener('click', toggleTheme);
-  document.getElementById('help-btn').addEventListener('click', () => document.getElementById('help').classList.add('show'));
+  document.querySelectorAll('.diff-btn').forEach((btn) => btn.addEventListener('click', () => { window.__archiveDateKey = null; document.getElementById('win').classList.remove('show'); newGame(btn.dataset.diff, true); }));
+  document.getElementById('new-btn').addEventListener('click', () => { window.__archiveDateKey = null; document.getElementById('win').classList.remove('show'); newGame(state.diff, false); });
+  const helpBtn = document.getElementById('helpButton');
+  if (helpBtn) helpBtn.addEventListener('click', () => document.getElementById('help').classList.add('show'));
   // pause/resume the solve clock whenever the help overlay opens or closes
   ['help-modal', 'help'].forEach((id) => { const h = document.getElementById(id); if (h) new MutationObserver(syncClock).observe(h, { attributes: true, attributeFilter: ['hidden', 'style', 'class'] }); });
-  document.getElementById('mute-btn').addEventListener('click', (e) => { muted = !muted; e.currentTarget.textContent = muted ? '🔇' : '🔊'; });
+  const muteBtn = document.getElementById('mute-btn');
+  if (muteBtn) muteBtn.addEventListener('click', (e) => { muted = !muted; e.currentTarget.textContent = muted ? '🔇' : '🔊'; });
   document.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', (e) => { if (e.target === el || e.target.hasAttribute('data-close')) el.closest('.modal,.overlay').classList.remove('show'); }));
   document.getElementById('win-share').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(shareText()); document.getElementById('win-share').textContent = 'Copied!'; setTimeout(() => document.getElementById('win-share').textContent = 'Share', 1400); } catch (_) {}
