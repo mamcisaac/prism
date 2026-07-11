@@ -13,38 +13,23 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* chrome */
-.chrome {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px; border-bottom: 1px solid var(--border);
-  position: sticky; top: 0; background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(8px); z-index: 5;
-}
-.brand { display: flex; align-items: center; gap: 9px; text-decoration: none; color: var(--fg); font-weight: 700; }
-.brand-mark { color: var(--accent); font-size: 20px; }
-.brand-text { font-size: 15px; }
-.brand-game { color: var(--fg-subtle); font-weight: 600; }
-.chrome-actions { display: flex; align-items: center; gap: 8px; }
-.streak { font-size: 13px; color: var(--fg-muted); font-weight: 600; }
-.icon-btn {
-  width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border);
-  background: var(--bg-elev); color: var(--fg-muted); font-size: 16px; cursor: pointer;
-  display: grid; place-items: center; transition: .15s;
-}
-.icon-btn:hover { border-color: var(--accent); color: var(--accent); }
-
 /* stage */
 .stage { max-width: 600px; margin: 0 auto; padding: 18px 16px 60px; }
-.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+/* .diff-topbar: renamed from .topbar (was colliding with the canonical arcade
+   brand header, which also uses .topbar) — this is the in-stage difficulty/
+   controls row, unrelated to the shared chrome topbar. */
+.diff-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .topbar-right { display: inline-flex; align-items: center; gap: 10px; }
 .topbar-right .streak { font-size: 13px; color: var(--fg-muted); font-weight: 600; white-space: nowrap; }
+/* .diffs is prism's own segmented-pill wrapper (not the canonical .diff-row layout),
+   so .diff-btn is scoped under it here rather than restyling the shared component globally. */
 .diffs { display: inline-flex; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 999px; padding: 3px; }
-.diff-btn {
+.diffs .diff-btn {
   border: none; background: transparent; color: var(--fg-muted); font-weight: 600; font-size: 14px;
   padding: 7px 16px; border-radius: 999px; cursor: pointer; transition: .15s;
 }
-.diff-btn.active { background: var(--accent); color: var(--on-accent); }
-.diff-btn.done:not(.active)::after { content: '✓'; margin-left: 5px; color: var(--accent); font-size: 11px; }
+.diffs .diff-btn.active { background: var(--accent); color: var(--on-accent); }
+.diffs .diff-btn.done:not(.active)::after { content: '✓'; margin-left: 5px; color: var(--accent); font-size: 11px; }
 .ghost-btn, .primary-btn {
   border: 1px solid var(--border); background: var(--bg-elev); color: var(--fg);
   font-weight: 600; font-size: 14px; padding: 8px 16px; border-radius: 999px; cursor: pointer; transition: .15s;
@@ -88,11 +73,10 @@ body {
 .modal-card ul { color: var(--fg-muted); line-height: 1.6; padding-left: 18px; }
 .modal-card strong { color: var(--fg); }
 .muted { color: var(--fg-subtle) !important; font-size: 13px; }
-.modal-x { position: absolute; top: 12px; right: 14px; border: none; background: transparent; color: var(--fg-subtle); font-size: 26px; cursor: pointer; line-height: 1; }
 
-/* leaderboard modal shell (the inner card + lb-* content come from arcade-components.css) */
-.modal-backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: 20px; z-index: 25;
-  background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(4px); }
-.modal-backdrop[hidden] { display: none; }
-.modal-close-x { position: absolute; top: 12px; right: 14px; border: none; background: transparent; color: var(--fg-subtle); font-size: 26px; cursor: pointer; line-height: 1; }
+/* .modal-backdrop and .modal-close-x now come from the canonical chrome.css
+   (vended, linked in index.html) — the inner card + lb-* content come from
+   arcade-components.css. */
+/* extension of vended .lb-modal-inner: this modal doesn't use the canonical
+   .modal wrapper, so its h2 needs its own styling here. */
 .lb-modal-inner h2 { margin: 0 0 6px; color: var(--accent); }
