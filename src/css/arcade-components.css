@@ -142,13 +142,6 @@
   letter-spacing: 0.01em;
   margin-bottom: 8px;
 }
-.results-stars {
-  font-size: 40px;
-  letter-spacing: 4px;
-  color: var(--accent);
-  line-height: 1;
-  margin-bottom: 4px;
-}
 .results-time,
 .results-stat {
   font-size: 28px;
@@ -169,6 +162,13 @@
   color: var(--fg-muted);
   margin: 8px 0 14px;
   font-variant-numeric: tabular-nums;
+}
+/* Arcade-wide streak line (streakLineHtml) — appended into the card's subHtml. */
+.results-streak {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-top: 4px;
 }
 .daily-complete-note {
   margin: 12px 0 4px;
@@ -205,7 +205,6 @@
   .btn { padding: 11px 14px; font-size: 14px; }
   .diff-row { gap: 6px; margin-bottom: 10px; }
   .diff-btn { padding: 7px 4px; font-size: 13px; }
-  .results-stars { font-size: 34px; }
 }
 
 /* ── Daily / Random mode toggle ── */
@@ -238,7 +237,6 @@
 .lb-row.me { background: color-mix(in srgb, var(--accent) 22%, var(--bg-elev)); outline: 1px solid var(--accent); }
 .lb-rank { width: 1.6em; text-align: right; color: var(--fg-subtle); font-variant-numeric: tabular-nums; font-weight: 700; }
 .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lb-stars { color: var(--accent); letter-spacing: 1px; font-size: 12px; margin: 0 4px; }
 .lb-score { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); }
 .lb-status { font-size: 13px; color: var(--fg-muted); text-align: center; padding: 14px 0; }
 .lb-you-note { padding-top: 8px; }

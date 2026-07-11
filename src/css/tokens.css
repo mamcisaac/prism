@@ -76,6 +76,18 @@
     --tone-slate-fg: #475569;
     --tone-plum-bg: #fdf4ff;
     --tone-plum-fg: #86198f;
+    --tone-coral-bg: #fff0ec;
+    --tone-coral-fg: #c2452c;
+    --tone-ice-bg: #f0f9ff;
+    --tone-ice-fg: #0284c7;
+    --tone-lime-bg: #f7fee7;
+    --tone-lime-fg: #4d7c0f;
+    --tone-iris-bg: #edefff;
+    --tone-iris-fg: #4e56c0;
+    --tone-sand-bg: #f8f4ec;
+    --tone-sand-fg: #8c6d3f;
+    --tone-bronze-bg: #f7efe4;
+    --tone-bronze-fg: #8f5a2a;
 
     /* Type scale (use clamp() for fluid sizing where you need it) */
     --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
@@ -133,6 +145,18 @@
     --tone-slate-fg: #94a3b8;
     --tone-plum-bg: #2a0a2e;
     --tone-plum-fg: #e9aefc;
+    --tone-coral-bg: #2b130b;
+    --tone-coral-fg: #ff9d80;
+    --tone-ice-bg: #08283b;
+    --tone-ice-fg: #7dd3fc;
+    --tone-lime-bg: #1a2e05;
+    --tone-lime-fg: #a3e635;
+    --tone-iris-bg: #191d3f;
+    --tone-iris-fg: #a5acff;
+    --tone-sand-bg: #241c10;
+    --tone-sand-fg: #d4b483;
+    --tone-bronze-bg: #241507;
+    --tone-bronze-fg: #e0a86c;
 }
 
 /* ── Base interaction reset (arcade-wide) ────────────────────────

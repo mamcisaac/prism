@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="description" content="Rotate the optics until light blooms through every pane. A daily light-routing puzzle from the Connect the Thoughts arcade." />
   <meta name="theme-color" content="#0b1120" />
   <title>Prism — Connect the Thoughts</title>
@@ -10,23 +10,29 @@
   <link rel="stylesheet" href="src/css/tokens.css" />
   <link rel="stylesheet" href="src/css/arcade-components.css" />
   <link rel="stylesheet" href="src/css/game.css" />
-  <script>
-    (function () {
-      try {
-        var url = new URLSearchParams(location.search).get('theme');
-        if (url === 'dark' || url === 'light') localStorage.setItem('ctt.theme', url);
-      } catch (_) {}
-      var s = null;
-      try { s = localStorage.getItem('ctt.theme'); } catch (_) {}
-      document.documentElement.setAttribute('data-theme', s || 'dark');
-    })();
-  </script>
+  <!-- arcade:theme-boot:start -->
+<script>
+  // Pre-paint theme bootstrap (sync-managed — edit in hub shared/, never here).
+  // URL param > saved ctt.theme > dark. The ?theme= read is what carries the
+  // theme across origins (hub → game); the localStorage read is what keeps
+  // every game on the SAME theme (all games share one origin).
+  (function () {
+    try {
+      var url = new URLSearchParams(location.search).get('theme');
+      if (url === 'dark' || url === 'light') localStorage.setItem('ctt.theme', url);
+    } catch (_) {}
+    var s = null;
+    try { s = localStorage.getItem('ctt.theme'); } catch (_) {}
+    document.documentElement.setAttribute('data-theme', s || 'dark');
+  })();
+</script>
+<!-- arcade:theme-boot:end -->
   <script src="/arcade-theme.js"></script>
 </head>
 <body>
   <!-- arcade:topbar:start -->
 <header class="topbar">
-  <a class="brand" href="https://connectthethoughts.ca/" aria-label="Connect the Thoughts — arcade home">
+  <a class="brand" data-arcade-pass-theme href="https://connectthethoughts.ca/" aria-label="Connect the Thoughts — arcade home">
     <span class="brand-mark" aria-hidden="true">
       <svg viewBox="0 0 32 32" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="7" cy="8" r="2.5"/><circle cx="25" cy="8" r="2.5"/>
@@ -93,9 +99,10 @@
     </div>
   </main>
 
-  <!-- win overlay -->
-  <div id="win" class="overlay" data-close>
-    <div class="overlay-card">
+  <!-- win overlay (canonical .modal-backdrop[hidden] so shared Escape handling works) -->
+  <div id="win" class="modal-backdrop" hidden>
+    <div class="overlay-card" role="dialog" aria-modal="true" aria-label="Puzzle solved">
+      <button class="modal-close-x" data-close type="button" aria-label="Close">×</button>
       <div class="win-line"></div>
       <div class="win-sub"></div>
       <div id="lb-inline" class="lb-inline"></div>
@@ -107,9 +114,9 @@
   </div>
 
   <!-- help -->
-  <div id="help" class="modal" data-close>
-    <div class="modal-card">
-      <button class="modal-x" data-close>×</button>
+  <div id="help" class="modal-backdrop" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="How to play">
+      <button class="modal-close-x" data-close type="button" aria-label="Close">×</button>
       <h2>Prism</h2>
       <p>A beam of light enters the panel. <strong>Tap a mirror</strong> to flip it between <code>/</code> and <code>\</code> — the whole beam re-routes.</p>
       <p>Goal: light up <strong>every pane</strong> (the diamonds). On Hard, a pane must get its <strong>exact colour</strong> — mix beams to make it.</p>
@@ -147,6 +154,10 @@
       <div class="lb-body" id="lb-body"></div>
     </div>
   </div>
+
+  <footer class="arcade-footer">
+    Part of <a href="https://connectthethoughts.ca/" data-arcade-pass-theme>connectthethoughts.ca</a>
+  </footer>
 
   <script type="module" src="src/game.js"></script>
 </body>

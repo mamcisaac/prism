@@ -70,9 +70,8 @@ body {
 .panecount.is-under { color: var(--warn); }
 
 /* overlay + modal */
-.overlay, .modal { position: fixed; inset: 0; display: none; place-items: center; padding: 20px;
-  background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(4px); z-index: 20; }
-.overlay.show, .modal.show { display: grid; }
+/* #win and #help are canonical .modal-backdrop[hidden] containers now (rules
+   below); only the inner card styling is game-specific. */
 .overlay-card, .modal-card {
   background: var(--bg-elev); border: 1px solid var(--border); border-radius: var(--radius-lg);
   padding: 26px 28px; max-width: 380px; width: 100%; box-shadow: var(--shadow-lg); position: relative; text-align: center;

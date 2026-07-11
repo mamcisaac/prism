@@ -27,7 +27,7 @@
 // Empty-state wording ("No solves yet …") is deliberately HARD-CODED, not a
 // per-game option — every game shares one phrasing so the arcade can't drift.
 import {
-  isLeaderboardConfigured, fetchTop, cleanHandle, rowParts, starsHtml,
+  isLeaderboardConfigured, fetchTop, cleanHandle,
   alltimeBoard, personalBests, historyStats, historyStatsHtml,
 } from './arcade-leaderboard.js';
 
@@ -47,13 +47,12 @@ export function createLeaderboardModal(config) {
     // Single-board mode (omit `difficulties`): one daily board, no diff tabs.
     alltimeKey = 'daily', youKey = 'daily', youLabel = 'Daily',
     youHeadSingle = 'Your daily best',
-    // Raw-metric games (moves/attempts/steps/clues/closeness) rank without a
-    // star tier: hide the stars column. `alltimeVersion` picks a fresh all-time
-    // board when a game's score meaning changed. `bestComparator(candidate,
-    // current)` orders the "You" bests by the game's own metric.
-    showStars = true, alltimeVersion = 1, bestComparator,
+    // `alltimeVersion` picks a fresh all-time board when a game's score meaning
+    // changed. `bestComparator(candidate, current)` orders the "You" bests by
+    // the game's own metric. `youStats` = {metricLabel, buckets:[{label, max}]}
+    // renders the You-tab metric-distribution chart (see historyStatsHtml).
+    alltimeVersion = 1, bestComparator, youStats,
   } = config;
-  const starsCol = (n) => showStars ? `<span class="lb-stars">${starsHtml(n)}</span>` : '';
   // Games without difficulty tiers (e.g. verdict, doublet-cross) run a single
   // daily board: no diff tabs, no "· <diff>" suffix, one row in "You".
   const single = !difficulties;
@@ -74,11 +73,9 @@ export function createLeaderboardModal(config) {
     const me = myHandle ? cleanHandle(myHandle) : null;
     const list = rows.map((r, i) => {
       const isMe = me && cleanHandle(r.handle) === me;
-      const parts = rowParts(r);
       return `<li class="lb-row${isMe ? ' me' : ''}">` +
         `<span class="lb-rank">${i + 1}</span>` +
         `<span class="lb-name">${escapeHtml(r.handle)}</span>` +
-        starsCol(parts.stars) +
         `<span class="lb-score">${rowStat(r)}</span>` +
         `</li>`;
     }).join('');
@@ -90,8 +87,9 @@ export function createLeaderboardModal(config) {
   }
 
   // The "You" tab: personal bests + a shared stats panel (solves, current/best
-  // streak, stars distribution) derived from local history — identical across
-  // every leaderboard game, so the arcade can't drift on what "your stats" means.
+  // streak, optional metric distribution) derived from local history — identical
+  // across every leaderboard game, so the arcade can't drift on what "your
+  // stats" means.
   function renderYou() {
     const body = document.getElementById('lb-body');
     const best = personalBests(gameSlug, bestComparator);
@@ -99,16 +97,16 @@ export function createLeaderboardModal(config) {
     if (single) {
       const d = best[youKey];
       bests = d
-        ? `<div class="lb-you-head">${youHeadSingle}</div><ol class="lb-list"><li class="lb-row"><span class="lb-name">${youLabel}</span>${starsCol(d.stars)}<span class="lb-score">${youRow(d)}</span></li></ol>`
+        ? `<div class="lb-you-head">${youHeadSingle}</div><ol class="lb-list"><li class="lb-row"><span class="lb-name">${youLabel}</span><span class="lb-score">${youRow(d)}</span></li></ol>`
         : '';
     } else {
       const rows = youOrder.filter(d => best[d]).map(d =>
-        `<li class="lb-row"><span class="lb-name">${diffLabel[d]}</span>${starsCol(best[d].stars)}<span class="lb-score">${youRow(best[d], d)}</span></li>`
+        `<li class="lb-row"><span class="lb-name">${diffLabel[d]}</span><span class="lb-score">${youRow(best[d], d)}</span></li>`
       ).join('');
       bests = rows ? `<div class="lb-you-head">${youHead}</div><ol class="lb-list">${rows}</ol>` : '';
     }
     const st = historyStats(gameSlug);
-    const stats = historyStatsHtml(gameSlug, showStars);
+    const stats = historyStatsHtml(gameSlug, youStats);
     const note = st.solves
       ? `<div class="lb-status">${st.solves} solve${st.solves === 1 ? '' : 's'} recorded on this device.</div>`
       : `<div class="lb-status">No solves yet — finish today's daily to start your record.</div>`;

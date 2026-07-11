@@ -8,9 +8,11 @@
 // window.ArcadeResults build into vanilla games). `--check` flags drift.
 //
 // Renders the standardized finish card every daily game shares: headline,
-// stars, time, a game-specific sub-line + detail block, an optional
-// "daily complete" note, the #lb-inline + #placements mounts (the game fills
-// these afterwards, exactly as before), and the Next / Share action buttons.
+// the game's ranking metric, a game-specific sub-line + detail block, an
+// optional "daily complete" note, the #lb-inline + #placements mounts (the
+// game fills these afterwards, exactly as before), and the Next / Share
+// action buttons. (Stars were removed arcade-wide — every game leads with
+// the raw metric its leaderboard ranks by.)
 //
 // Button priority is centralized here: while daily levels remain, advancing to
 // the next difficulty is primary and Share steps down; once the run is
@@ -49,13 +51,8 @@ function actionsHtml(o) {
 //   headline       string  — e.g. "Perfect!" (omitted if falsy)
 //   statHtml       string  — the PRIMARY stat: whatever the game ranks by
 //                            (e.g. "42 strokes", "3 clues", "88% close", a score,
-//                            or — for genuinely stars/time-ranked games — stars or
-//                            a time). This is the headline number a player reads.
-//                            Prefer this over starsHtml/timeHtml so the results
-//                            card always shows the metric the leaderboard uses.
-//   starsHtml      string  — pre-rendered stars markup (omitted if falsy). Use
-//                            ONLY when stars are the game's ranking metric; most
-//                            games should put their metric in statHtml instead.
+//                            or a time). This is the headline number a player
+//                            reads — always the metric the leaderboard uses.
 //   timeHtml       string  — pre-rendered time text (omitted if falsy). Use ONLY
 //                            when time is the game's ranking metric (e.g. switchback).
 //   subHtml        string  — game-specific sub-line (omitted if falsy)
@@ -74,7 +71,6 @@ export function renderResults(opts) {
   const parts = [
     '<div class="results-card">',
     o.headline ? '<div class="results-headline">' + o.headline + '</div>' : '',
-    o.starsHtml ? '<div class="results-stars">' + o.starsHtml + '</div>' : '',
     o.statHtml ? '<div class="results-stat">' + o.statHtml + '</div>' : '',
     o.timeHtml ? '<div class="results-time">' + o.timeHtml + '</div>' : '',
     o.subHtml ? '<div class="results-sub">' + o.subHtml + '</div>' : '',
@@ -96,9 +92,4 @@ export function renderResults(opts) {
   if (againBtn && typeof o.onAgain === 'function') againBtn.addEventListener('click', o.onAgain);
 
   return { card, shareBtn, nextBtn, againBtn };
-}
-
-// Standard headline wording from a star count (games may override).
-export function headlineForStars(stars) {
-  return stars >= 3 ? 'Perfect!' : stars > 0 ? 'Solved!' : 'Complete';
 }

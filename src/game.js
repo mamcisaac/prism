@@ -7,10 +7,12 @@ import { trace, lockedSet, rotatableIndices, ALT_ORIENT, xy, idx } from './engin
 import {
   isLeaderboardConfigured, submitScore, submitMetricCompletion, alltimeBoard,
   cleanHandle, formatTime, rowParts, recordHistory, historyStats, loadHistory, reportStats, todayStr,
+  loadSharedHandle, saveSharedHandle,
 } from './arcade-leaderboard.js';
 import { createLeaderboardModal } from './arcade-leaderboard-ui.js';
 import { dailyDateKey } from './arcade-daily-seed.js';
 import { createArchive } from './arcade-archive.js';
+import { createTutorial } from './arcade-tutorial.js';
 
 const GAME_SLUG = 'prism';
 const DIFFS = ['easy', 'medium', 'hard'];
@@ -33,10 +35,7 @@ function dailySeed(diff) {
 }
 
 // ---- leaderboard handle + per-board local bests ----
-const HKEY = 'ctt.prism.handle';
-function loadHandle() { try { return localStorage.getItem(HKEY) || ''; } catch (_) { return ''; } }
-function saveHandle(h) { try { localStorage.setItem(HKEY, h); } catch (_) {} }
-let lbHandle = loadHandle();
+let lbHandle = loadSharedHandle(GAME_SLUG);
 const BKEY = 'ctt.prism.bests2';
 function loadBests() { try { return JSON.parse(localStorage.getItem(BKEY)) || {}; } catch (_) { return {}; } }
 function saveBests(b) { try { localStorage.setItem(BKEY, JSON.stringify(b)); } catch (_) {} }
@@ -74,8 +73,6 @@ function isShown(el) {
   if (el.hasAttribute('hidden')) return false;
   const st = el.style;
   if (st && (st.display === 'none' || st.visibility === 'hidden')) return false;
-  // this game's modals toggle a `.show` class rather than the hidden attribute
-  if (el.classList.contains('modal') || el.classList.contains('overlay')) return el.classList.contains('show');
   return true;
 }
 function overlayOpen() {
@@ -259,7 +256,7 @@ function win() {
   ov.querySelector('.win-line').textContent = `Solved in ${state.moves} ${state.moves === 1 ? 'move' : 'moves'} · par ${state.par}`;
   ov.querySelector('.win-sub').textContent = state.isDaily ? `${DIFF_LABEL[state.diff]} daily · ${formatTime(timeMs)}` : 'Random puzzle';
   renderWinLeaderboard(document.getElementById('lb-inline'), value, timeMs, run, firstAttempt);
-  ov.classList.add('show');
+  ov.hidden = false;
   syncChrome();
 }
 
@@ -301,7 +298,7 @@ function renderWinLeaderboard(mount, value, timeMs, run, firstAttempt) {
     + '<button id="lb-submit" class="btn" type="button">Submit</button></div></div>';
   const input = mount.querySelector('#lb-handle'), btn = mount.querySelector('#lb-submit');
   input.focus();
-  btn.addEventListener('click', () => { const name = cleanHandle(input.value); if (!name) { input.focus(); return; } lbHandle = name; saveHandle(lbHandle); doSubmit(name); });
+  btn.addEventListener('click', () => { const name = cleanHandle(input.value); if (!name) { input.focus(); return; } lbHandle = saveSharedHandle(name); doSubmit(name); });
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
 }
 
@@ -309,9 +306,47 @@ const lbUi = createLeaderboardModal({
   gameSlug: GAME_SLUG, difficulties: DIFFS, diffLabel: DIFF_LABEL,
   getDifficulty: () => curDiff(), getHandle: () => lbHandle,
   boardKeyForOffset, dayLabelForOffset,
-  rowStat: (r) => formatTime(rowParts(r).timeMs),
-  youRow: (best) => formatTime(best.timeMs),
+  alltimeVersion: 2,
+  // value = max(0, moves-par)*1e7 + timeMs (ascending): buckets are par bands.
+  youStats: { metricLabel: 'Over par', buckets: [
+    { label: 'Par or better', max: 9999999 }, { label: '+1', max: 19999999 },
+    { label: '+2', max: 29999999 }, { label: '+3 or more' },
+  ] },
+  rowStat: (r) => {
+    const m = r.meta || {};
+    if (m.par != null && m.moves != null) {
+      const over = Math.max(0, m.moves - m.par);
+      return `${over === 0 ? 'par' : '+' + over} · ${formatTime(m.timeMs || 0)}`;
+    }
+    return formatTime(rowParts(r).timeMs); // legacy composite rows
+  },
+  youRow: (best) => {
+    if (best.par != null && best.moves != null) {
+      const over = Math.max(0, best.moves - best.par);
+      return `${over === 0 ? 'par' : '+' + over} · ${formatTime(best.timeMs || 0)}`;
+    }
+    return formatTime(best.timeMs || 0);
+  },
 });
+
+// First-play tutorial — shared carousel mechanics; only this content is per-game.
+// #help uses .modal-card (not one of the default HELP_CARD_SELECTORS), so point
+// wire() at it explicitly.
+const TUTORIAL_STEPS = [
+  {
+    title: 'Route the light',
+    body: 'A beam enters the panel. <b>Tap a mirror</b> to flip it between <code>/</code> and <code>\\</code> — the whole beam re-routes instantly.',
+  },
+  {
+    title: 'Light every pane',
+    body: 'Get light onto <b>every diamond pane</b>. On Hard, a pane needs its <b>exact colour</b> — mix beams together to match it.',
+  },
+  {
+    title: 'Frost means settled',
+    body: 'Dim mirrors are <b>fixed</b> in place. As panes light up, the mirrors feeding them <b>frost over</b> — that part\'s done. Beat <b>par</b> for a clean solve.',
+  },
+];
+const tutorial = createTutorial({ gameSlug: GAME_SLUG, steps: TUTORIAL_STEPS, helpCard: '#help .modal-card' });
 
 function shareText() {
   const tag = state.isDaily ? `${dailyDateKey()} · ${DIFF_LABEL[state.diff]}` : 'Random';
@@ -350,25 +385,31 @@ function boot() {
   lbUi.wire();
   createArchive({
     isDayDone: (key) => loadHistory(GAME_SLUG).some((h) => h.date === key),
-    loadDailyForDate: (key) => { window.__archiveDateKey = key; document.getElementById('win').classList.remove('show'); newGame(state ? state.diff : 'easy', true); },
+    loadDailyForDate: (key) => { window.__archiveDateKey = key; document.getElementById('win').hidden = true; newGame(state ? state.diff : 'easy', true); },
   }).wire();
+  tutorial.wire();
+  tutorial.maybeAutoStart();
   // canvas colours come from CSS vars — re-render when the shared toggle flips theme
   document.addEventListener('arcade:themechange', () => { if (state) render(); });
   canvas().addEventListener('click', onClick);
-  document.querySelectorAll('.diff-btn').forEach((btn) => btn.addEventListener('click', () => { window.__archiveDateKey = null; document.getElementById('win').classList.remove('show'); newGame(btn.dataset.diff, true); }));
-  document.getElementById('new-btn').addEventListener('click', () => { window.__archiveDateKey = null; document.getElementById('win').classList.remove('show'); newGame(state.diff, false); });
+  document.querySelectorAll('.diff-btn').forEach((btn) => btn.addEventListener('click', () => { window.__archiveDateKey = null; document.getElementById('win').hidden = true; newGame(btn.dataset.diff, true); }));
+  document.getElementById('new-btn').addEventListener('click', () => { window.__archiveDateKey = null; document.getElementById('win').hidden = true; newGame(state.diff, false); });
   const helpBtn = document.getElementById('helpButton');
-  if (helpBtn) helpBtn.addEventListener('click', () => document.getElementById('help').classList.add('show'));
+  if (helpBtn) helpBtn.addEventListener('click', () => { document.getElementById('help').hidden = false; });
   // pause/resume the solve clock whenever the help overlay opens or closes
   ['help-modal', 'help'].forEach((id) => { const h = document.getElementById(id); if (h) new MutationObserver(syncClock).observe(h, { attributes: true, attributeFilter: ['hidden', 'style', 'class'] }); });
   const muteBtn = document.getElementById('mute-btn');
   if (muteBtn) muteBtn.addEventListener('click', (e) => { muted = !muted; e.currentTarget.textContent = muted ? '🔇' : '🔊'; });
-  document.querySelectorAll('[data-close]').forEach((el) => el.addEventListener('click', (e) => { if (e.target === el || e.target.hasAttribute('data-close')) el.closest('.modal,.overlay').classList.remove('show'); }));
+  // Canonical modal wiring: a [data-close] control or a click on the backdrop
+  // itself hides the .modal-backdrop (Escape is handled by shared arcade-theme.js).
+  document.querySelectorAll('.modal-backdrop').forEach((m) => m.addEventListener('click', (e) => {
+    if (e.target === m || (e.target.closest && e.target.closest('[data-close]'))) m.hidden = true;
+  }));
   document.getElementById('win-share').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(shareText()); document.getElementById('win-share').textContent = 'Copied!'; setTimeout(() => document.getElementById('win-share').textContent = 'Share', 1400); } catch (_) {}
   });
   document.getElementById('win-next').addEventListener('click', () => {
-    document.getElementById('win').classList.remove('show');
+    document.getElementById('win').hidden = true;
     const ni = (DIFFS.indexOf(state.diff) + 1) % DIFFS.length;
     newGame(state.isDaily ? DIFFS[ni] : state.diff, state.isDaily);
   });
