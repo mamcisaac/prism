@@ -4,159 +4,143 @@
    a copy of this file into its own repo so it can deploy
    independently. To bump the brand, update here and re-vendor.
 
+   BRAND: "The Penny Arcade" — warm paper, muted machine colours,
+   Manrope type. Light = the daytime floor (cream + terracotta);
+   dark = "After Hours" (warm charcoal + gold). One brand accent
+   across every game; per-game colour lives only on the hub cards.
+
    How each game uses it:
      1. <link rel="stylesheet" href="tokens.css"> before any other CSS
         (or @import "./tokens.css" at the top of the main stylesheet)
-     2. Use the shared brand accent as-is — the daily arcade games
-        (ladder, mosaic, switchback, guess-the-date, the-dictionary-game)
-        do NOT override --accent: one cohesive accent across the arcade.
-        --on-accent is the text/icon colour that sits on top of --accent
-        (white in light mode; a dark teal in dark mode, where the accent is
-        light). Component styles use var(--on-accent).
+     2. Use the shared brand accent as-is — games do NOT override
+        --accent: one cohesive accent across the arcade. --on-accent is
+        the text/icon colour that sits on top of --accent.
      3. Wire arcade-theme.js for theme bootstrap + persistence
         (key: localStorage["ctt.theme"] = "light" | "dark")
 
-   The legacy per-game tone vars below remain for non-daily games
-   (connect-the-thoughts, Cornerstone, kids' games) that still theme by tone.
+   The per-game tone vars below are retuned to the Penny Arcade
+   families for the few games that still theme by tone.
    ============================================================ */
 
+/* Manrope — the arcade's primary type. Loaded here (the one stylesheet
+   every game links first) so type is cohesive without per-game <link>s. */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
 :root {
-    --bg: #f8fafc;
-    --bg-elev: #ffffff;
-    --fg: #0f172a;
-    --fg-muted: #475569;
-    --fg-subtle: #64748b;
-    --border: #e2e8f0;
-    --border-strong: #cbd5e1;
-    --accent: #0f766e;
-    --accent-hover: #115e59;
-    --on-accent: #ffffff;
-    --focus: #2563eb;
-    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
-    --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
-    --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.12), 0 4px 8px rgba(15, 23, 42, 0.05);
-    --radius-sm: 8px;
-    --radius-md: 14px;
-    --radius-lg: 20px;
+    /* Penny Arcade — daytime floor (paper + terracotta) */
+    --bg: #f5f1e8;
+    --bg-elev: #fbf8f0;
+    --bg-elev-2: #efe9da;
+    --fg: #22261f;
+    --fg-muted: #5c604f;
+    --fg-subtle: #8a8471;
+    --border: #e5dfd0;
+    --border-strong: #c9c0aa;
+    --accent: #b3502d;
+    --accent-hover: #9a4327;
+    --on-accent: #f7f2e7;
+    --focus: #2a78d6;
+    /* Named brand colours the hub + a few games reach for directly */
+    --paper: #f5f1e8;
+    --ink: #22261f;
+    --gold: #b07c22;
+    --gold-bright: #dcb469;
+    --forest: #2c4636;
+    --dashed: #c9c0aa;
+    --good: #2c7a4b;
+    --warn: #b07c22;
+    --bad: #b3402d;
+    --shadow-sm: 0 1px 2px rgba(34, 38, 31, 0.06), 0 1px 3px rgba(34, 38, 31, 0.04);
+    --shadow-md: 0 4px 12px rgba(34, 38, 31, 0.10), 0 2px 4px rgba(34, 38, 31, 0.05);
+    --shadow-lg: 0 12px 28px rgba(34, 38, 31, 0.14), 0 4px 8px rgba(34, 38, 31, 0.06);
+    /* Penny Arcade is flat + paper — crisp corners, not pills */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 10px;
 
-    /* Per-game tones */
-    --tone-emerald-bg: #ecfdf5;
-    --tone-emerald-fg: #047857;
-    --tone-amber-bg: #fffbeb;
-    --tone-amber-fg: #b45309;
-    --tone-grass-bg: #f0fdf4;
-    --tone-grass-fg: #15803d;
-    --tone-sky-bg: #eff6ff;
-    --tone-sky-fg: #1d4ed8;
-    --tone-rose-bg: #fff1f2;
-    --tone-rose-fg: #be123c;
-    --tone-violet-bg: #f5f3ff;
-    --tone-violet-fg: #6d28d9;
-    --tone-indigo-bg: #eef2ff;
-    --tone-indigo-fg: #4338ca;
-    --tone-crimson-bg: #fef2f2;
-    --tone-crimson-fg: #b91c1c;
-    --tone-ochre-bg: #fffbeb;
-    --tone-ochre-fg: #a16207;
-    --tone-rust-bg: #fff7ed;
-    --tone-rust-fg: #c2410c;
-    --tone-teal-bg: #f0fdfa;
-    --tone-teal-fg: #0f766e;
-    --tone-gold-bg: #fefce8;
-    --tone-gold-fg: #ca8a04;
-    --tone-berry-bg: #fff1f5;
-    --tone-berry-fg: #9f1239;
-    --tone-purple-bg: #faf5ff;
-    --tone-purple-fg: #7c3aed;
-    --tone-cyan-bg: #ecfeff;
-    --tone-cyan-fg: #0891b2;
-    --tone-midnight-bg: #eef2ff;
-    --tone-midnight-fg: #1e3a8a;
-    --tone-slate-bg: #f1f5f9;
-    --tone-slate-fg: #475569;
-    --tone-plum-bg: #fdf4ff;
-    --tone-plum-fg: #86198f;
-    --tone-coral-bg: #fff0ec;
-    --tone-coral-fg: #c2452c;
-    --tone-ice-bg: #f0f9ff;
-    --tone-ice-fg: #0284c7;
-    --tone-lime-bg: #f7fee7;
-    --tone-lime-fg: #4d7c0f;
-    --tone-iris-bg: #edefff;
-    --tone-iris-fg: #4e56c0;
-    --tone-sand-bg: #f8f4ec;
-    --tone-sand-fg: #8c6d3f;
-    --tone-bronze-bg: #f7efe4;
-    --tone-bronze-fg: #8f5a2a;
+    /* Per-game tones — retuned to the six Penny Arcade machine colours.
+       terracotta / navy / gold / deep-red / green / purple families. */
+    --tone-emerald-bg: #dce5d6; --tone-emerald-fg: #2c4636;
+    --tone-grass-bg: #dce5d6;   --tone-grass-fg: #2c4636;
+    --tone-teal-bg: #dce5d6;    --tone-teal-fg: #2c4636;
+    --tone-lime-bg: #dce5d6;    --tone-lime-fg: #46602c;
+    --tone-sky-bg: #dce3ea;     --tone-sky-fg: #1f3a5c;
+    --tone-ice-bg: #dce3ea;     --tone-ice-fg: #1f3a5c;
+    --tone-cyan-bg: #dce3ea;    --tone-cyan-fg: #1f4a5c;
+    --tone-midnight-bg: #dce3ea; --tone-midnight-fg: #1f3a5c;
+    --tone-slate-bg: #e3e0d5;   --tone-slate-fg: #4a4738;
+    --tone-amber-bg: #f2e4c6;   --tone-amber-fg: #b07c22;
+    --tone-gold-bg: #f2e4c6;    --tone-gold-fg: #b07c22;
+    --tone-ochre-bg: #f2e4c6;   --tone-ochre-fg: #a06e1e;
+    --tone-sand-bg: #efe4cf;    --tone-sand-fg: #8c6d3f;
+    --tone-bronze-bg: #f0e2cf;  --tone-bronze-fg: #8f5a2a;
+    --tone-rust-bg: #f3ddcd;    --tone-rust-fg: #b3502d;
+    --tone-coral-bg: #f3ddcd;   --tone-coral-fg: #b3502d;
+    --tone-rose-bg: #f0dcd5;    --tone-rose-fg: #7c2f2a;
+    --tone-crimson-bg: #f0dcd5; --tone-crimson-fg: #7c2f2a;
+    --tone-berry-bg: #f0dcd5;   --tone-berry-fg: #7c2f2a;
+    --tone-violet-bg: #e5deec;  --tone-violet-fg: #5b4a7a;
+    --tone-indigo-bg: #e5deec;  --tone-indigo-fg: #4e4675;
+    --tone-purple-bg: #e5deec;  --tone-purple-fg: #5b4a7a;
+    --tone-iris-bg: #e5deec;    --tone-iris-fg: #4e4675;
+    --tone-plum-bg: #e9dced;    --tone-plum-fg: #6d3a6a;
 
-    /* Type scale (use clamp() for fluid sizing where you need it) */
-    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
-    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    /* Type scale */
+    --font-sans: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 }
 
 [data-theme="dark"] {
-    --bg: #0b1120;
-    --bg-elev: #131b2e;
-    --fg: #e2e8f0;
-    --fg-muted: #94a3b8;
-    --fg-subtle: #64748b;
-    --border: #1e293b;
-    --border-strong: #334155;
-    --accent: #5eead4;
-    --accent-hover: #2dd4bf;
-    --on-accent: #06302b;
+    /* After Hours — the arcade at night (warm charcoal + gold) */
+    --bg: #23221c;
+    --bg-elev: #2b2a22;
+    --bg-elev-2: #33322a;
+    --fg: #efe9d8;
+    --fg-muted: #a8a08a;
+    --fg-subtle: #6e6952;
+    --border: #3a382c;
+    --border-strong: #4a4738;
+    --accent: #dcb469;
+    --accent-hover: #e8c882;
+    --on-accent: #23221c;
+    --focus: #7da3cc;
+    --paper: #23221c;
+    --ink: #efe9d8;
+    --gold: #dcb469;
+    --gold-bright: #e8c882;
+    --forest: #8fb08a;
+    --dashed: #4a4738;
+    --good: #8fb08a;
+    --warn: #dcb469;
+    --bad: #cf7a6f;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
 
-    --tone-emerald-bg: #022c22;
-    --tone-emerald-fg: #6ee7b7;
-    --tone-amber-bg: #2a1a04;
-    --tone-amber-fg: #fcd34d;
-    --tone-grass-bg: #052e16;
-    --tone-grass-fg: #86efac;
-    --tone-sky-bg: #0c1e3c;
-    --tone-sky-fg: #93c5fd;
-    --tone-rose-bg: #2a0a13;
-    --tone-rose-fg: #fda4af;
-    --tone-violet-bg: #1e1b3a;
-    --tone-violet-fg: #c4b5fd;
-    --tone-indigo-bg: #1e1b4b;
-    --tone-indigo-fg: #a5b4fc;
-    --tone-crimson-bg: #2a0a0a;
-    --tone-crimson-fg: #f87171;
-    --tone-ochre-bg: #2a2207;
-    --tone-ochre-fg: #eab308;
-    --tone-rust-bg: #2a1505;
-    --tone-rust-fg: #fb923c;
-    --tone-teal-bg: #042f2e;
-    --tone-teal-fg: #2dd4bf;
-    --tone-gold-bg: #2a2207;
-    --tone-gold-fg: #facc15;
-    --tone-berry-bg: #2a0a13;
-    --tone-berry-fg: #fb7185;
-    --tone-purple-bg: #1a1033;
-    --tone-purple-fg: #a78bfa;
-    --tone-cyan-bg: #083344;
-    --tone-cyan-fg: #22d3ee;
-    --tone-midnight-bg: #0a1733;
-    --tone-midnight-fg: #93c5fd;
-    --tone-slate-bg: #1e293b;
-    --tone-slate-fg: #94a3b8;
-    --tone-plum-bg: #2a0a2e;
-    --tone-plum-fg: #e9aefc;
-    --tone-coral-bg: #2b130b;
-    --tone-coral-fg: #ff9d80;
-    --tone-ice-bg: #08283b;
-    --tone-ice-fg: #7dd3fc;
-    --tone-lime-bg: #1a2e05;
-    --tone-lime-fg: #a3e635;
-    --tone-iris-bg: #191d3f;
-    --tone-iris-fg: #a5acff;
-    --tone-sand-bg: #241c10;
-    --tone-sand-fg: #d4b483;
-    --tone-bronze-bg: #241507;
-    --tone-bronze-fg: #e0a86c;
+    --tone-emerald-bg: #23301f; --tone-emerald-fg: #8fb08a;
+    --tone-grass-bg: #23301f;   --tone-grass-fg: #8fb08a;
+    --tone-teal-bg: #23301f;    --tone-teal-fg: #8fb08a;
+    --tone-lime-bg: #26301c;    --tone-lime-fg: #a6c085;
+    --tone-sky-bg: #1f2a38;     --tone-sky-fg: #7da3cc;
+    --tone-ice-bg: #1f2a38;     --tone-ice-fg: #7da3cc;
+    --tone-cyan-bg: #1f2e38;    --tone-cyan-fg: #7db0cc;
+    --tone-midnight-bg: #1f2a38; --tone-midnight-fg: #7da3cc;
+    --tone-slate-bg: #2e2c24;   --tone-slate-fg: #b0a88f;
+    --tone-amber-bg: #322a18;   --tone-amber-fg: #dcb469;
+    --tone-gold-bg: #322a18;    --tone-gold-fg: #dcb469;
+    --tone-ochre-bg: #322a18;   --tone-ochre-fg: #dcb469;
+    --tone-sand-bg: #2e2818;    --tone-sand-fg: #d4b483;
+    --tone-bronze-bg: #2e2416;  --tone-bronze-fg: #e0a86c;
+    --tone-rust-bg: #33201a;    --tone-rust-fg: #e0784f;
+    --tone-coral-bg: #33201a;   --tone-coral-fg: #e0784f;
+    --tone-rose-bg: #331d1a;    --tone-rose-fg: #cf7a6f;
+    --tone-crimson-bg: #331d1a; --tone-crimson-fg: #cf7a6f;
+    --tone-berry-bg: #331d1a;   --tone-berry-fg: #cf7a6f;
+    --tone-violet-bg: #2a2536;  --tone-violet-fg: #a794c9;
+    --tone-indigo-bg: #2a2536;  --tone-indigo-fg: #a794c9;
+    --tone-purple-bg: #2a2536;  --tone-purple-fg: #a794c9;
+    --tone-iris-bg: #2a2536;    --tone-iris-fg: #a794c9;
+    --tone-plum-bg: #2e2536;    --tone-plum-fg: #c19ac0;
 }
 
 /* ── Base interaction reset (arcade-wide) ────────────────────────
