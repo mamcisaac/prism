@@ -6,7 +6,7 @@ import { generateBoard, mulberry32 } from './generate.js';
 import { trace, lockedSet, rotatableIndices, ALT_ORIENT, xy, idx } from './engine.js';
 import {
   isLeaderboardConfigured, submitScore, submitMetricCompletion, alltimeBoard,
-  cleanHandle, formatTime, rowParts, recordHistory, historyStats, loadHistory, reportStats, todayStr,
+  cleanHandle, formatTime, rowParts, recordHistory, historyStats, loadHistory, reportStats, todayStr, streakLineHtml,
   loadSharedHandle, saveSharedHandle,
 } from './arcade-leaderboard.js';
 import { createLeaderboardModal } from './arcade-leaderboard-ui.js';
@@ -255,6 +255,7 @@ function win() {
   const ov = document.getElementById('win');
   ov.querySelector('.win-line').textContent = `Solved in ${state.moves} ${state.moves === 1 ? 'move' : 'moves'} · par ${state.par}`;
   ov.querySelector('.win-sub').textContent = state.isDaily ? `${DIFF_LABEL[state.diff]} daily · ${formatTime(timeMs)}` : 'Random puzzle';
+  ov.querySelector('.win-streak').innerHTML = state.isDaily ? streakLineHtml(GAME_SLUG) : '';
   renderWinLeaderboard(document.getElementById('lb-inline'), value, timeMs, run, firstAttempt);
   ov.hidden = false;
   syncChrome();
@@ -376,8 +377,6 @@ function syncChrome() {
     btn.classList.toggle('done', doneToday(btn.dataset.diff)); // check mark on dailies cleared today
   });
   document.getElementById('mode-label').textContent = state.isDaily ? `${DIFF_LABEL[state.diff]} · today` : 'Random';
-  const streakEl = document.getElementById('streak');
-  if (streakEl) { const cur = historyStats(GAME_SLUG).currentStreak; streakEl.textContent = cur ? `🔆 ${cur}` : ''; }
 }
 
 function boot() {
