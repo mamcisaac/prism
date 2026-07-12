@@ -67,7 +67,9 @@
   font-family: inherit;
   font-size: 15px;
   font-weight: 700;
+  text-align: center;
   cursor: pointer;
+  text-decoration: none; /* clean when .btn is applied to an <a> (e.g. the "Next daily" link) */
   transition: filter 0.12s, transform 0.08s;
   touch-action: manipulation;
   -webkit-user-select: none;
