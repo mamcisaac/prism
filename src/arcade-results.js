@@ -43,19 +43,52 @@ function currentDailySlug(o) {
   if (o.gameSlug) return String(o.gameSlug);
   try { return (location.pathname.split('/').filter(Boolean)[0]) || ''; } catch (_) { return ''; }
 }
+// Has this game's daily been played TODAY on this device? Every daily game
+// records a dated entry into the shared ctt.<slug>.history (same origin across
+// the whole arcade), so the chain can skip dailies you've already cleared.
+// Date parsing mirrors arcade-leaderboard's historyStats (padded or unpadded
+// 'YYYY-M-D' → the same UTC day-number today is measured in).
+function playedDailyToday(slug) {
+  try {
+    const raw = localStorage.getItem('ctt.' + String(slug).toLowerCase() + '.history');
+    if (!raw) return false;
+    const h = JSON.parse(raw);
+    if (!Array.isArray(h) || !h.length) return false;
+    const today = Math.floor(Date.now() / 86400000);
+    return h.some(function (e) {
+      const p = String((e && e.date) || '').split('-').map(Number);
+      if (!p[0]) return false;
+      return Math.floor(Date.UTC(p[0], p[1] - 1, p[2]) / 86400000) === today;
+    });
+  } catch (_) { return false; }
+}
+function themeParam() {
+  try { return localStorage.getItem('ctt.theme') || document.documentElement.getAttribute('data-theme') || 'dark'; } catch (_) { return 'dark'; }
+}
+function gameOrigin() {
+  try { if (location.origin && /^https?:/.test(location.origin)) return location.origin; } catch (_) {}
+  return 'https://mamcisaac.github.io';
+}
 // The next-daily link {label, url}, or null if this game isn't in the chain.
+// Walks the fixed Dailies order from the current game, SKIPPING dailies already
+// played today, and wraps. If everything today is done, points back to the
+// arcade home with a "cleared" cue instead of looping you onto a finished game.
 function nextDailyLink(o) {
   const slug = currentDailySlug(o).toLowerCase();
   if (!slug) return null;
   let i = -1;
   for (let k = 0; k < DAILY_CHAIN.length; k++) { if (DAILY_CHAIN[k][0].toLowerCase() === slug) { i = k; break; } }
   if (i === -1) return null;
-  const nx = DAILY_CHAIN[(i + 1) % DAILY_CHAIN.length];
-  let theme = 'dark';
-  try { theme = localStorage.getItem('ctt.theme') || document.documentElement.getAttribute('data-theme') || 'dark'; } catch (_) {}
-  let origin = 'https://mamcisaac.github.io';
-  try { if (location.origin && /^https?:/.test(location.origin)) origin = location.origin; } catch (_) {}
-  return { label: 'Next daily · ' + nx[1], url: origin + '/' + nx[0] + '/?theme=' + theme };
+  const origin = gameOrigin(), theme = themeParam();
+  for (let step = 1; step <= DAILY_CHAIN.length; step++) {
+    const nx = DAILY_CHAIN[(i + step) % DAILY_CHAIN.length];
+    if (nx[0].toLowerCase() === slug) break; // came all the way back to us → all done
+    if (!playedDailyToday(nx[0])) {
+      return { label: 'Next daily · ' + nx[1], url: origin + '/' + nx[0] + '/?theme=' + theme };
+    }
+  }
+  // Every daily is cleared for today — send them home to the arcade.
+  return { label: 'You’ve cleared today’s dailies', url: 'https://connectthethoughts.ca/?theme=' + theme, allDone: true };
 }
 
 // Build the action-buttons row honoring the Next-vs-Share priority rule.
