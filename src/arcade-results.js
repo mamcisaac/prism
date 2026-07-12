@@ -25,22 +25,60 @@ function el(html) {
   return t.content.firstElementChild;
 }
 
+// ── Arcade daily chain ──────────────────────────────────────────────────────
+// Finishing one game's daily points the player at the NEXT daily in the arcade,
+// so the whole floor is one continuous run. Order mirrors the hub's "The
+// Dailies" section and wraps at the end. All games deploy on one origin
+// (location.origin), so a plain link inherits the shared ctt.theme; ?theme= is
+// belt-and-suspenders for the cross-origin stub path.
+const DAILY_CHAIN = [
+  ['tumbler', 'Tumbler'], ['mosaic', 'Mosaic'], ['Cornerstone', 'Cornerstone'],
+  ['switchback', 'Switchback'], ['ladder', 'Ladder'], ['connect-the-thoughts', 'Connect the Thoughts'],
+  ['the-dictionary-game', 'The Dictionary Game'], ['guess-the-date', 'Guess the Date'],
+  ['word-crush', 'Word Crush'], ['doublet-cross', 'Doublet Cross'],
+];
+// Which game are we in? Explicit opts.gameSlug wins; otherwise infer from the
+// first path segment (production games live at <origin>/<slug>/).
+function currentDailySlug(o) {
+  if (o.gameSlug) return String(o.gameSlug);
+  try { return (location.pathname.split('/').filter(Boolean)[0]) || ''; } catch (_) { return ''; }
+}
+// The next-daily link {label, url}, or null if this game isn't in the chain.
+function nextDailyLink(o) {
+  const slug = currentDailySlug(o).toLowerCase();
+  if (!slug) return null;
+  let i = -1;
+  for (let k = 0; k < DAILY_CHAIN.length; k++) { if (DAILY_CHAIN[k][0].toLowerCase() === slug) { i = k; break; } }
+  if (i === -1) return null;
+  const nx = DAILY_CHAIN[(i + 1) % DAILY_CHAIN.length];
+  let theme = 'dark';
+  try { theme = localStorage.getItem('ctt.theme') || document.documentElement.getAttribute('data-theme') || 'dark'; } catch (_) {}
+  let origin = 'https://mamcisaac.github.io';
+  try { if (location.origin && /^https?:/.test(location.origin)) origin = location.origin; } catch (_) {}
+  return { label: 'Next daily · ' + nx[1], url: origin + '/' + nx[0] + '/?theme=' + theme };
+}
+
 // Build the action-buttons row honoring the Next-vs-Share priority rule.
-function actionsHtml(o) {
+// When `dailyNext` is set (the run is fully done and this game chains onward),
+// the cross-game "Next daily" link is the primary action and Share steps down.
+function actionsHtml(o, dailyNext) {
   const showNext = o.nextLabel != null && o.nextLabel !== '';
   const showShare = o.showShare !== false;
-  const advanceFirst = !!o.advanceFirst && showNext;
+  const advanceFirst = dailyNext ? false : (!!o.advanceFirst && showNext);
+  const dailyHtml = dailyNext
+    ? '<a class="btn" id="next-daily-btn" href="' + dailyNext.url + '">' + dailyNext.label + ' <span aria-hidden="true">→</span></a>'
+    : '';
   const share = showShare
-    ? '<button class="btn' + (advanceFirst ? ' secondary' : '') + '" id="share-btn" type="button">' + (o.shareLabel || 'Share') + '</button>'
+    ? '<button class="btn' + ((advanceFirst || dailyNext) ? ' secondary' : '') + '" id="share-btn" type="button">' + (o.shareLabel || 'Share') + '</button>'
     : '';
   const next = showNext
-    ? '<button class="btn' + (advanceFirst || !showShare ? '' : ' secondary') + '" id="next-btn" type="button">' + o.nextLabel + '</button>'
+    ? '<button class="btn' + ((advanceFirst || (!showShare && !dailyNext)) ? '' : ' secondary') + '" id="next-btn" type="button">' + o.nextLabel + '</button>'
     : '';
   // Optional tertiary action (e.g. "Try again" / replay the same puzzle).
   const again = (o.againLabel != null && o.againLabel !== '')
     ? '<button class="btn secondary" id="again-btn" type="button">' + o.againLabel + '</button>'
     : '';
-  return (advanceFirst ? (next + share) : (share + next)) + again;
+  return dailyHtml + (advanceFirst ? (next + share) : (share + next)) + again;
 }
 
 // Render the results card into `mount` (its innerHTML is replaced).
@@ -64,9 +102,14 @@ function actionsHtml(o) {
 //   showShare      boolean — default true
 //   advanceFirst   boolean — true => Next primary, Share secondary
 //   againLabel     string  — optional 3rd action (e.g. "Try again"); omitted if falsy
+//   gameSlug       string  — this game's arcade slug (optional). Used to pick the
+//                            "Next daily" chain target on dailyComplete; inferred
+//                            from the URL when omitted.
 //   onShare, onNext, onAgain  functions
 export function renderResults(opts) {
   const o = opts || {};
+  // On a finished daily run, offer the next daily in the arcade as the primary CTA.
+  const dailyNext = o.dailyComplete ? nextDailyLink(o) : null;
   const note = o.completeNote || '\u{1F389} Daily complete — new puzzles tomorrow.';
   const parts = [
     '<div class="results-card">',
@@ -78,7 +121,7 @@ export function renderResults(opts) {
     o.dailyComplete ? '<div class="daily-complete-note">' + note + '</div>' : '',
     '<div class="lb-inline" id="lb-inline"></div>',
     o.dailyComplete ? '<div class="placements" id="placements"></div>' : '',
-    '<div class="results-actions">' + actionsHtml(o) + '</div>',
+    '<div class="results-actions">' + actionsHtml(o, dailyNext) + '</div>',
     '</div>',
   ];
   o.mount.innerHTML = parts.join('');
