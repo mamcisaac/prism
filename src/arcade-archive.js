@@ -6,7 +6,7 @@
 // A game opts in by:
 //   1. giving its archive button id="archive-button" (or passing buttonId),
 //   2. supplying loadDailyForDate(dateKey) — set the replay date + restart the
-//      daily (typically: window.__archiveDateKey = dateKey; load the daily),
+//      daily (typically: enterArchiveDate(dateKey); load the daily),
 //   3. optionally isDayDone(dateKey) -> bool for a ✓ "completed" mark.
 //
 // Self-contained: builds its own modal (canonical .modal-backdrop/.modal chrome)
@@ -25,6 +25,37 @@ export function archiveDateKey(d) {
 export function archiveDayNumber(key) {
   const p = String(key).split('-').map(Number);
   return Math.max(1, Math.floor((Date.UTC(p[0], p[1] - 1, p[2]) - DAILY_EPOCH) / 86400000) + 1);
+}
+
+// ---- Replay state: the one owner of the archive flag ----------------------
+// A daily game is either showing TODAY's puzzle or replaying an archived day.
+// That choice lives here (backed by window.__archiveDateKey, which classic
+// builds share across modules); everything date-derived — seeding, board keys,
+// Day N — reads it through dailyDateKey() in arcade-daily-seed.js. Games must
+// not poke window.__archiveDateKey directly.
+//
+// INVARIANT: building a new board NEVER changes this. Only a deliberate "leave
+// the archive" action — a mode switch, New game, "Back to today's daily" —
+// calls exitArchive(). Games used to fold the clear into newGame(fromArchive),
+// which made every re-pick call site responsible for threading a flag; the ones
+// that forgot (a difficulty switch mid-replay) silently served TODAY's puzzle.
+// With the clear hoisted out of newGame, an in-archive re-pick — difficulty,
+// variant, sub-board — stays on the archived day by construction.
+export function getArchiveDate() {
+  if (typeof window === 'undefined') return null;
+  return window.__archiveDateKey || null;
+}
+
+export function isArchiving() { return !!getArchiveDate(); }
+
+// Pin the replay date. Called by a game's loadDailyForDate before it restarts.
+export function enterArchiveDate(key) {
+  if (typeof window !== 'undefined') window.__archiveDateKey = String(key);
+}
+
+// Return to today's daily. The ONLY thing that clears the replay date.
+export function exitArchive() {
+  if (typeof window !== 'undefined') window.__archiveDateKey = null;
 }
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({

@@ -86,11 +86,14 @@
       </div>
     </div>
 
-    <p class="goal">Rotate mirrors so light reaches <strong>every pane</strong>. <span id="mode-label" class="mode-label"></span></p>
+    <p class="goal">Split white light and route <strong>each colour to its pane</strong>. <span id="mode-label" class="mode-label"></span></p>
 
     <div class="board-wrap">
       <canvas id="board"></canvas>
     </div>
+
+    <!-- pre-cut optics tray (Hard) — populated/shown by game.js when the board ships one -->
+    <div id="tray" class="tray" role="group" aria-label="Pre-cut optics tray" hidden></div>
 
     <div class="hud">
       <div class="stat"><span class="stat-num" id="panecount">0/0</span><span class="stat-cap">panes lit</span></div>
@@ -119,11 +122,13 @@
     <div class="modal-card" role="dialog" aria-modal="true" aria-label="How to play">
       <button class="modal-close-x" data-close type="button" aria-label="Close">×</button>
       <h2>Prism</h2>
-      <p>A beam of light enters the panel. <strong>Tap a mirror</strong> to flip it between <code>/</code> and <code>\</code> — the whole beam re-routes.</p>
-      <p>Goal: light up <strong>every pane</strong> (the diamonds). On Hard, a pane must get its <strong>exact colour</strong> — mix beams to make it.</p>
+      <p>A beam of <strong>white light</strong> hits a glass <strong>prism</strong> ▲ and splits into <strong>red, green and blue</strong>. The apex points where the green ray continues; red and blue fan out to its sides.</p>
+      <p>Goal: steer every colour to the <strong>diamond pane</strong> that wants it — each pane is tinted and lettered (R/G/B/Y/M/C/W) with its target colour.</p>
       <ul>
-        <li>Dim mirrors are <strong>fixed</strong> — they shape the light but you can't move them.</li>
-        <li>As panes settle, the mirrors feeding them <strong>frost over</strong> — that part is done.</li>
+        <li><strong>Tap a mirror</strong> to flip it <code>/</code>↔<code>\</code>; <strong>tap a prism</strong> to spin it a quarter turn. The light re-routes instantly.</li>
+        <li><strong>Colours mix.</strong> Cross two beams at a pane for a secondary (R+G = yellow). Feed all three primaries back into a reversed prism to rebuild white.</li>
+        <li><strong>Hard: pre-cut optics.</strong> Some pieces come in a <strong>tray</strong> below the board — tap one, then tap an empty <strong>socket</strong> ▢ to mount it (1 move). Tap a mounted piece to lift it back, free.</li>
+        <li>Dim pieces are <strong>fixed</strong>; as panes settle, the optics feeding them <strong>frost over</strong> — that part is done.</li>
         <li>Every puzzle has <strong>one</strong> solution. Beat <strong>par</strong> for a clean solve.</li>
       </ul>
       <p class="muted">A new puzzle drops daily. Same one for everyone.</p>

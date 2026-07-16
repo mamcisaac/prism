@@ -3,7 +3,7 @@
 // proven in scripts/selfcheck.mjs; this file is the UI around them.
 
 import { generateBoard, mulberry32 } from './generate.js';
-import { trace, lockedSet, rotatableIndices, ALT_ORIENT, xy, idx } from './engine.js';
+import { trace, lockedSet, rotatableIndices, socketIndices, rotateOnce, ROTATABLE, DIRS, LEFT, RIGHT, xy, idx } from './engine.js';
 import {
   isLeaderboardConfigured, submitScore, submitMetricCompletion, alltimeBoard,
   cleanHandle, formatTime, rowParts, recordHistory, historyStats, loadHistory, reportStats, todayStr, streakLineHtml,
@@ -11,7 +11,7 @@ import {
 } from './arcade-leaderboard.js';
 import { createLeaderboardModal } from './arcade-leaderboard-ui.js';
 import { dailyDateKey } from './arcade-daily-seed.js';
-import { createArchive } from './arcade-archive.js';
+import { createArchive, enterArchiveDate, exitArchive, getArchiveDate, archiveDayNumber } from './arcade-archive.js';
 import { createTutorial } from './arcade-tutorial.js';
 
 const GAME_SLUG = 'prism';
@@ -21,11 +21,20 @@ const DIFF_LABEL = { easy: 'Easy', medium: 'Medium', hard: 'Hard', total: 'Total
 // ---- colour: RGB bitmask -> glow ----
 const GLOW = { 1: '#ff5d5d', 2: '#54e08a', 4: '#5b9bff', 3: '#ffd24a', 5: '#ff6dd0', 6: '#4fe3e8', 7: '#fff2bf' };
 const glow = (c) => GLOW[c] || '#fff2bf';
+// Light theme: additive 'lighter' blending saturates toward white on the cream
+// background, so beams swap to opaque saturated inks drawn source-over. White
+// (7) is special — pure white is invisible on cream, so it renders as a pale
+// warm core inside a darker warm casing (reads as "light", stays distinct from
+// yellow, mask 3).
+const LIGHT_BEAM = { 1: '#d92b2b', 2: '#0f9448', 4: '#2361d8', 3: '#c08a00', 5: '#c2189c', 6: '#0e8fa0', 7: '#f7edd2' };
+const LIGHT_WHITE_EDGE = '#a3874a';
+const beamInk = (c) => LIGHT_BEAM[c] || LIGHT_BEAM[7];
+const isLightTheme = () => document.documentElement.dataset.theme === 'light';
 
 // ---- daily seeding (LOCAL date, like the rest of the arcade) ----
 // Seed off the shared daily date key so the puzzle, the board key, and the
-// shared client's local date all share one basis. dailyDateKey() honors
-// window.__archiveDateKey, so an archived day replays byte-identically while
+// shared client's local date all share one basis. dailyDateKey() honors the
+// pinned archive replay date, so an archived day replays byte-identically while
 // today's key ('YYYY-M-D', 1-based month) reproduces the historical seed exactly.
 function dailySeed(diff) {
   const p = dailyDateKey().split('-').map(Number);
@@ -59,8 +68,9 @@ function dayLabelForOffset(offset) { if (offset === 0) return 'Today'; if (offse
 const doneToday = (diff) => loadHistory(GAME_SLUG).some((h) => h.date === todayStr() && h.difficulty === diff);
 
 // ---- game state ----
-let state = null;  // { diff, isDaily, board, par, moves, finished }
+let state = null;  // { diff, isDaily, board, par, moves, finished, hasTray }
 let cell = 48, pad = 18;
+let traySel = null; // index into board.tray of the selected pre-cut piece (one slot)
 
 // ---- pause the solve clock while a help/tutorial overlay is open ----
 // Time only matters at win() (timeMs = Date.now() - state.startMs, submitted as
@@ -97,12 +107,18 @@ window._clockState = () => ({ startMs: state && state.startMs, pausedAt });
 function newGame(diff, isDaily) {
   const seed = isDaily ? dailySeed(diff) : (mulberry32((Date.now() ^ (Math.random() * 1e9)) >>> 0)() * 4294967296) >>> 0;
   const g = generateBoard(seed, diff);
-  state = { diff, isDaily, board: g.board, par: g.par, moves: 0, finished: false, seed, startMs: Date.now() };
+  // hasTray is decided once at game start: the tray row stays docked (emptying
+  // out / refilling on lifts) for the whole game, and never appears on tiers
+  // that ship without one.
+  const hasTray = !!(g.board.tray && g.board.tray.length);
+  state = { diff, isDaily, board: g.board, par: g.par, moves: 0, finished: false, seed, startMs: Date.now(), hasTray };
+  traySel = null;
   pausedAt = 0;
   syncClock(); // if a first-play tutorial / help is already open, pause the just-started clock
   const li = document.getElementById('lb-inline'); if (li) li.innerHTML = '';
   layout();
   render(true);
+  renderTray();
   syncChrome();
 }
 
@@ -130,7 +146,7 @@ function render(instant) {
   const ctx = canvas().getContext('2d');
   const b = state.board;
   const t = trace(b);
-  const locked = state.finished ? new Set(rotatableIndices(b)) : lockedSet(b);
+  const locked = state.finished ? new Set([...rotatableIndices(b), ...socketIndices(b)]) : lockedSet(b);
   const css = getComputedStyle(document.body);
   const fg = css.getPropertyValue('--fg').trim();
   const bgElev = css.getPropertyValue('--bg-elev').trim();
@@ -154,45 +170,113 @@ function render(instant) {
     roundRect(ctx, pad + gx * cell + 4, pad + gy * cell + 4, cell - 8, cell - 8, 6); ctx.fill();
   }
 
-  // light beams (under pieces), additive glow
-  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  // light beams (under pieces), additive glow. Merge segments that share the
+  // same grid edge (OR-ing their colour masks) so recombined light draws ONCE as
+  // its true blend — three primaries on one line render as white, not three
+  // stacked primary strokes. Endpoints are normalised so a beam and its reverse
+  // collapse to the same edge.
+  const merged = new Map();
   for (const s of t.segs) {
-    const g = glow(s.color);
-    ctx.strokeStyle = g; ctx.shadowColor = g; ctx.shadowBlur = 14 + 8 * bloom;
-    ctx.lineWidth = 3 + 2 * bloom;
-    ctx.beginPath(); ctx.moveTo(cx(s.x0), cy(s.y0)); ctx.lineTo(cx(s.x1), cy(s.y1)); ctx.stroke();
+    const a = s.x0 + ',' + s.y0, z = s.x1 + ',' + s.y1;
+    const key = a < z ? a + '|' + z : z + '|' + a;
+    const e = merged.get(key);
+    if (e) e.color |= s.color; else merged.set(key, { x0: s.x0, y0: s.y0, x1: s.x1, y1: s.y1, color: s.color });
+  }
+  const light = isLightTheme();
+  ctx.save(); ctx.lineCap = 'round';
+  if (!light) { // dark: additive bloom, colours mix optically
+    ctx.globalCompositeOperation = 'lighter';
+    for (const s of merged.values()) {
+      const g = glow(s.color);
+      ctx.strokeStyle = g; ctx.shadowColor = g; ctx.shadowBlur = 14 + 8 * bloom;
+      ctx.lineWidth = 3 + 2 * bloom;
+      ctx.beginPath(); ctx.moveTo(cx(s.x0), cy(s.y0)); ctx.lineTo(cx(s.x1), cy(s.y1)); ctx.stroke();
+    }
+  } else { // light: opaque saturated inks with crisp edges (see LIGHT_BEAM)
+    for (const s of merged.values()) {
+      const x0 = cx(s.x0), y0 = cy(s.y0), x1 = cx(s.x1), y1 = cy(s.y1);
+      if (s.color === 7) { // white: warm casing so the pale core stays visible
+        ctx.shadowBlur = 0; ctx.strokeStyle = LIGHT_WHITE_EDGE; ctx.lineWidth = 5.5 + 2 * bloom;
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      }
+      const ink = beamInk(s.color);
+      ctx.strokeStyle = ink; ctx.shadowColor = ink; ctx.shadowBlur = 3 + 4 * bloom;
+      ctx.lineWidth = 3 + 2 * bloom;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    }
   }
   ctx.restore();
 
-  // pieces
+  // pieces. Everything is drawn to be legible with ZERO light — unlit optics use
+  // full-strength strokes (no ghosting), panes are tinted with the colour they
+  // want, and the emitter sits in a visible housing.
+  const accent = css.getPropertyValue('--accent').trim();
+  const subtle = css.getPropertyValue('--fg-subtle').trim();
+  const elev2 = css.getPropertyValue('--bg-elev-2').trim();
+  const strong = css.getPropertyValue('--border-strong').trim();
   for (let i = 0; i < b.cells.length; i++) {
     const c = b.cells[i]; if (c.type === 'empty' || c.type === 'wall') continue;
     const [gx, gy] = xy(i, b.w); const X = cx(gx), Y = cy(gy); const r = cell * 0.34;
+    const fixed = c.fixed, lk = locked.has(i);
     if (c.type === 'emitter') {
       const g = glow(c.color);
-      ctx.fillStyle = g; ctx.shadowColor = g; ctx.shadowBlur = 16; ctx.beginPath(); ctx.arc(X, Y, cell * 0.22, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
+      // housing: a solid casing so the source of the light is unmistakable when dark
+      ctx.fillStyle = elev2; ctx.strokeStyle = strong; ctx.lineWidth = 2;
+      roundRect(ctx, X - cell * 0.32, Y - cell * 0.32, cell * 0.64, cell * 0.64, 7); ctx.fill(); ctx.stroke();
+      // muzzle pointing where the beam fires (reads even before it is lit)
+      const [ex, ey] = DIRS[c.dir];
+      ctx.fillStyle = light ? LIGHT_WHITE_EDGE : g; ctx.globalAlpha = 0.9;
+      roundRect(ctx, X + ex * cell * 0.18 - 4, Y + ey * cell * 0.18 - 4, 8, 8, 2); ctx.fill(); ctx.globalAlpha = 1;
+      // glowing core (light theme: pale warm disc in a warm ring — a white glow
+      // is invisible on cream)
+      ctx.beginPath(); ctx.arc(X, Y, cell * 0.19, 0, 7);
+      if (light) { ctx.fillStyle = beamInk(7); ctx.fill(); ctx.strokeStyle = LIGHT_WHITE_EDGE; ctx.lineWidth = 2.5; ctx.stroke(); }
+      else { ctx.fillStyle = g; ctx.shadowColor = g; ctx.shadowBlur = 16; ctx.fill(); ctx.shadowBlur = 0; }
     } else if (c.type === 'pane') {
       const got = t.paneColor.get(i) || 0;
       const ok = t.satisfied.has(i);
-      const sz = cell * 0.5 * (ok ? 1 + 0.06 * bloom : 1);
+      const need = c.need || got || 7;         // what this pane is asking for
+      const tint = glow(need);
+      const sz = cell * 0.52 * (ok ? 1 + 0.06 * bloom : 1);
       ctx.save(); ctx.translate(X, Y); ctx.rotate(Math.PI / 4);
-      if (ok) { const g = glow(c.need || got || 7); ctx.fillStyle = g; ctx.shadowColor = g; ctx.shadowBlur = 18; roundRect(ctx, -sz / 2, -sz / 2, sz, sz, 4); ctx.fill(); }
-      else { ctx.strokeStyle = got ? css.getPropertyValue('--warn').trim() : fg; ctx.globalAlpha = got ? 0.95 : 0.5; ctx.lineWidth = 2.5; roundRect(ctx, -sz / 2, -sz / 2, sz, sz, 4); ctx.stroke(); }
-      ctx.restore();
-      if (c.need && c.need !== 7) { ctx.fillStyle = fg; ctx.globalAlpha = 0.8; ctx.font = `600 ${Math.round(cell * 0.22)}px ui-monospace, SFMono-Regular, Menlo, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(colorGlyph(c.need), X, Y); ctx.globalAlpha = 1; }
-    } else { // mirror / splitter
-      const fixed = c.fixed, lk = locked.has(i);
-      ctx.strokeStyle = fixed ? css.getPropertyValue('--fg-subtle').trim() : css.getPropertyValue('--accent').trim();
-      ctx.globalAlpha = fixed ? 0.55 : (lk ? 0.5 : 1);
-      ctx.lineWidth = fixed ? 3 : 4; ctx.lineCap = 'round';
-      const dx = c.orient === '/' ? r : -r;
-      ctx.beginPath(); ctx.moveTo(X - dx, Y + r); ctx.lineTo(X + dx, Y - r); ctx.stroke();
-      if (c.type === 'splitter') { ctx.fillStyle = ctx.strokeStyle; ctx.beginPath(); ctx.arc(X, Y, 3, 0, 7); ctx.fill(); }
-      ctx.globalAlpha = 1;
-      if (lk && !fixed) { // frost = settled (inevitability cue)
-        ctx.fillStyle = css.getPropertyValue('--accent').trim(); ctx.globalAlpha = 0.08;
-        roundRect(ctx, pad + gx * cell + 3, pad + gy * cell + 3, cell - 6, cell - 6, 6); ctx.fill(); ctx.globalAlpha = 1;
+      if (ok) { ctx.fillStyle = tint; ctx.shadowColor = tint; ctx.shadowBlur = 18; roundRect(ctx, -sz / 2, -sz / 2, sz, sz, 4); ctx.fill(); }
+      else {
+        // faint colour wash + a tinted diamond outline: the target colour is
+        // readable before any light arrives; a wrong-colour hit warms the outline.
+        ctx.globalAlpha = 0.16; ctx.fillStyle = tint; roundRect(ctx, -sz / 2, -sz / 2, sz, sz, 4); ctx.fill();
+        ctx.globalAlpha = got ? 1 : 0.7; ctx.strokeStyle = got && got !== need ? css.getPropertyValue('--warn').trim() : tint;
+        ctx.lineWidth = 2.5; roundRect(ctx, -sz / 2, -sz / 2, sz, sz, 4); ctx.stroke(); ctx.globalAlpha = 1;
       }
+      ctx.restore();
+      // colour glyph — always shown (colour-blind support + dark-start legibility)
+      ctx.font = `700 ${Math.round(cell * 0.24)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = ok ? 'rgba(20,18,10,0.72)' : fg; ctx.globalAlpha = ok ? 0.9 : 0.85;
+      ctx.fillText(colorGlyph(need), X, Y); ctx.globalAlpha = 1;
+    } else if (c.type === 'socket') {
+      // Etched mount: a dashed square outline — clearly "something goes here",
+      // and clearly not a pane (those are diamonds). When a tray piece is
+      // selected, empty mounts brighten to invite the placement.
+      const m = cell * 0.15, inviting = !c.piece && traySel != null;
+      ctx.save(); ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = inviting ? accent : strong; ctx.lineWidth = inviting ? 2 : 1.5;
+      ctx.globalAlpha = inviting ? 1 : 0.9;
+      roundRect(ctx, pad + gx * cell + m, pad + gy * cell + m, cell - 2 * m, cell - 2 * m, 5); ctx.stroke();
+      ctx.restore();
+      if (c.piece) { // mounted piece draws exactly like its bare counterpart
+        drawPieceGlyph(ctx, c.piece, X, Y, cell, { accent, subtle, strong, fixed: false, lk });
+        if (c.piece.type === 'prism') drawPrismFan(ctx, t, gx, gy, X, Y, c.piece.orient, light);
+      }
+    } else if (c.type === 'prism') {
+      drawPieceGlyph(ctx, c, X, Y, cell, { accent, subtle, strong, fixed, lk });
+      drawPrismFan(ctx, t, gx, gy, X, Y, c.orient, light);
+    } else { // mirror / splitter
+      drawPieceGlyph(ctx, c, X, Y, cell, { accent, subtle, strong, fixed, lk });
+    }
+    // frost = settled (inevitability cue) — rotatables and load-bearing mounts
+    if (lk && !fixed && (ROTATABLE.has(c.type) || (c.type === 'socket' && c.piece))) {
+      ctx.fillStyle = accent; ctx.globalAlpha = 0.08;
+      roundRect(ctx, pad + gx * cell + 3, pad + gy * cell + 3, cell - 6, cell - 6, 6); ctx.fill(); ctx.globalAlpha = 1;
     }
   }
 
@@ -208,7 +292,157 @@ function render(instant) {
 }
 
 function colorGlyph(c) { return { 1: 'R', 2: 'G', 4: 'B', 3: 'Y', 5: 'M', 6: 'C', 7: 'W' }[c] || ''; }
+// Is a beam entering this prism's base? — a trace segment landing on the cell
+// while travelling `orient` (the base-entry direction). Drives the rainbow fan.
+function beamEntersBase(t, px, py, orient) {
+  const [dx, dy] = DIRS[orient];
+  for (const s of t.segs) if (s.x1 === px && s.y1 === py && s.x1 - s.x0 === dx && s.y1 - s.y0 === dy) return true;
+  return false;
+}
 function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+
+// Draw a mirror / splitter / prism glyph centred on (X, Y) scaled to a `size`
+// px cell. ONE code path shared by the board pass, mounted sockets, and the
+// tray's mini-canvas slots — so a pre-cut piece looks identical everywhere.
+// o: { accent, subtle, strong, fixed, lk } (theme colours + state).
+function drawPieceGlyph(ctx, piece, X, Y, size, o) {
+  const r = size * 0.34;
+  if (piece.type === 'prism') {
+    // Glassy triangle. Apex points toward `orient`; the base faces the light
+    // travelling that way.
+    const [dvx, dvy] = DIRS[piece.orient];       // apex direction
+    const pvx = -dvy, pvy = dvx;                 // base spread (perpendicular)
+    const A = size * 0.36, B = size * 0.26, Wd = size * 0.30;
+    const bc = [X - dvx * B, Y - dvy * B];       // base centre
+    ctx.beginPath(); ctx.moveTo(X + dvx * A, Y + dvy * A);
+    ctx.lineTo(bc[0] + pvx * Wd, bc[1] + pvy * Wd); ctx.lineTo(bc[0] - pvx * Wd, bc[1] - pvy * Wd); ctx.closePath();
+    ctx.fillStyle = o.fixed ? o.subtle : o.accent; ctx.globalAlpha = 0.16; ctx.fill();
+    ctx.globalAlpha = o.lk ? 0.55 : 1; ctx.strokeStyle = o.fixed ? o.strong : o.accent; ctx.lineWidth = o.fixed ? 2.5 : 3; ctx.lineJoin = 'round';
+    ctx.stroke(); ctx.globalAlpha = 1;
+    return;
+  }
+  // mirror / splitter
+  ctx.strokeStyle = o.fixed ? o.subtle : o.accent;
+  ctx.globalAlpha = o.fixed ? 0.7 : (o.lk ? 0.55 : 1);
+  ctx.lineWidth = o.fixed ? 3 : 4; ctx.lineCap = 'round';
+  const dx = piece.orient === '/' ? r : -r;
+  if (piece.type === 'splitter') {
+    // half-silvered: TWIN rails split by a gap + a centre bead, so pass-through
+    // light no longer reads as a beam penetrating a solid mirror.
+    const ax = X - dx, ay = Y + r, zx = X + dx, zy = Y - r;
+    let vx = zx - ax, vy = zy - ay; const L = Math.hypot(vx, vy) || 1;
+    const off = 3, px = (-vy / L) * off, py = (vx / L) * off;
+    ctx.beginPath(); ctx.moveTo(ax + px, ay + py); ctx.lineTo(zx + px, zy + py); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ax - px, ay - py); ctx.lineTo(zx - px, zy - py); ctx.stroke();
+    ctx.fillStyle = ctx.strokeStyle; ctx.beginPath(); ctx.arc(X, Y, 3.5, 0, 7); ctx.fill();
+  } else { // solid mirror: one bold diagonal
+    ctx.beginPath(); ctx.moveTo(X - dx, Y + r); ctx.lineTo(X + dx, Y - r); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// The prism's "aha" cue: when a beam enters the base, a tiny rainbow fan
+// previews the R/G/B dispersion (light theme: opaque inks — additive glow
+// washes out on cream). Board-pass only — tray prisms have no light yet.
+function drawPrismFan(ctx, t, gx, gy, X, Y, orient, light) {
+  if (!beamEntersBase(t, gx, gy, orient)) return;
+  const [dvx, dvy] = DIRS[orient];
+  const bc = [X - dvx * cell * 0.26, Y - dvy * cell * 0.26]; // base centre
+  ctx.save(); if (!light) ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round'; ctx.lineWidth = 2.5;
+  for (const [dir, col] of [[LEFT[orient], 1], [orient, 2], [RIGHT[orient], 4]]) {
+    const [fx, fy] = DIRS[dir]; const g = light ? beamInk(col) : glow(col);
+    ctx.strokeStyle = g; ctx.shadowColor = g; ctx.shadowBlur = light ? 0 : 8;
+    ctx.beginPath(); ctx.moveTo(bc[0], bc[1]); ctx.lineTo(bc[0] + fx * cell * 0.2, bc[1] + fy * cell * 0.2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ---- tray (pre-cut optics, Hard) ----
+// A compact DOM row docked under the board. Slots are mini-canvases drawn with
+// drawPieceGlyph so tray pieces match the board exactly; tapping selects (one
+// selection slot), tapping again deselects.
+function renderTray() {
+  const el = document.getElementById('tray');
+  if (!el) return;
+  const show = !!(state && state.hasTray);
+  el.hidden = !show;
+  if (!show) return;
+  el.innerHTML = '<span class="tray-label">Tray</span>';
+  const tray = state.board.tray || [];
+  if (!tray.length) {
+    const d = document.createElement('span'); d.className = 'tray-empty'; d.textContent = 'all mounted';
+    el.appendChild(d);
+    return;
+  }
+  const css = getComputedStyle(document.body);
+  const o = {
+    accent: css.getPropertyValue('--accent').trim(),
+    subtle: css.getPropertyValue('--fg-subtle').trim(),
+    strong: css.getPropertyValue('--border-strong').trim(),
+    fixed: false, lk: false,
+  };
+  tray.forEach((p, k) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tray-slot' + (k === traySel ? ' selected' : '');
+    btn.setAttribute('aria-label', `${p.type} (${p.orient})${k === traySel ? ', selected' : ''}`);
+    btn.setAttribute('aria-pressed', k === traySel ? 'true' : 'false');
+    const S = 40, dpr = window.devicePixelRatio || 1;
+    const cv = document.createElement('canvas');
+    cv.width = S * dpr; cv.height = S * dpr; cv.style.width = S + 'px'; cv.style.height = S + 'px';
+    const c2 = cv.getContext('2d'); c2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawPieceGlyph(c2, p, S / 2, S / 2, S, o);
+    btn.appendChild(cv);
+    btn.addEventListener('click', () => onTrayTap(k));
+    el.appendChild(btn);
+  });
+}
+
+function onTrayTap(k) {
+  if (!state || state.finished) return;
+  traySel = traySel === k ? null : k; // one selection slot; second tap deselects
+  renderTray();
+  render(); // empty sockets brighten while a piece is selected
+}
+
+// Brief "look down here" pulse on the tray — the hint for tapping an empty
+// socket with nothing selected.
+function pulseTray() {
+  const el = document.getElementById('tray');
+  if (!el || el.hidden) return;
+  el.classList.remove('pulse');
+  void el.offsetWidth; // restart the CSS animation
+  el.classList.add('pulse');
+}
+
+// Shared post-change bookkeeping for placements/lifts/rotations: count the
+// move (lifts are free), bloom + chime on newly satisfied panes, win-check.
+function afterBoardChange(before, countsAsMove) {
+  if (countsAsMove) state.moves++;
+  const t = trace(state.board);
+  if (t.satisfied.size > before) { bloomUntil = performance.now() + 420; chime(420 + t.satisfied.size * 70); }
+  renderTray();
+  render();
+  if (t.paneCount > 0 && t.satisfied.size === t.paneCount) win();
+}
+
+function onSocketTap(i) {
+  const mount = state.board.cells[i];
+  const before = trace(state.board).satisfied.size;
+  if (mount.piece) {
+    // Lift back to the tray — FREE (a misplacement only costs the re-placement).
+    state.board.tray.push(mount.piece);
+    mount.piece = null;
+    traySel = null; // lifting always clears the selection
+    afterBoardChange(before, false);
+    return;
+  }
+  if (traySel == null || !state.board.tray[traySel]) { pulseTray(); return; } // pick from the tray first
+  mount.piece = state.board.tray.splice(traySel, 1)[0];
+  traySel = null;
+  afterBoardChange(before, true); // placing costs 1 move, like a rotation
+}
 
 // ---- input ----
 function onClick(ev) {
@@ -219,17 +453,15 @@ function onClick(ev) {
   if (gx < 0 || gy < 0 || gx >= state.board.w || gy >= state.board.h) return;
   const i = idx(gx, gy, state.board.w);
   const c = state.board.cells[i];
-  if (!c || (c.type !== 'mirror' && c.type !== 'splitter') || c.fixed) return;
-  // Frost is a *cosmetic* "settled" hint — we never disable a mirror, so the
-  // player can always experiment freely (and a multi-mirror dependency can never
-  // soft-lock the board).
+  if (c && c.type === 'socket') { onSocketTap(i); return; } // place / lift / hint
+  if (!c || !ROTATABLE.has(c.type) || c.fixed) return;
+  // Frost is a *cosmetic* "settled" hint — we never disable a piece, so the
+  // player can always experiment freely (and a multi-piece dependency can never
+  // soft-lock the board). One tap = one rotation: mirrors/splitters toggle,
+  // prisms cycle N→E→S→W→N. A tray selection survives a rotation.
   const before = trace(state.board).satisfied.size;
-  c.orient = ALT_ORIENT(c.orient);
-  state.moves++;
-  const t = trace(state.board);
-  if (t.satisfied.size > before) { bloomUntil = performance.now() + 420; chime(420 + t.satisfied.size * 70); }
-  render();
-  if (t.paneCount > 0 && t.satisfied.size === t.paneCount) win();
+  rotateOnce(c);
+  afterBoardChange(before, true);
 }
 
 // ---- win ----
@@ -335,16 +567,20 @@ const lbUi = createLeaderboardModal({
 // wire() at it explicitly.
 const TUTORIAL_STEPS = [
   {
-    title: 'Route the light',
-    body: 'A beam enters the panel. <b>Tap a mirror</b> to flip it between <code>/</code> and <code>\\</code> — the whole beam re-routes instantly.',
+    title: 'White light splits',
+    body: 'A beam of <b>white light</b> hits the glass <b>prism</b> ▲ and fans into <b>red, green &amp; blue</b>. The apex points the way the green ray keeps going.',
   },
   {
-    title: 'Light every pane',
-    body: 'Get light onto <b>every diamond pane</b>. On Hard, a pane needs its <b>exact colour</b> — mix beams together to match it.',
+    title: 'Route each colour',
+    body: 'Tap <b>mirrors</b> to flip them <code>/</code>↔<code>\\</code>, and tap a <b>prism</b> to spin it. Steer every colour to the <b>diamond pane</b> that wants it — each pane shows its letter (R/G/B).',
   },
   {
-    title: 'Frost means settled',
-    body: 'Dim mirrors are <b>fixed</b> in place. As panes light up, the mirrors feeding them <b>frost over</b> — that part\'s done. Beat <b>par</b> for a clean solve.',
+    title: 'Colours mix',
+    body: 'Cross two beams at a pane for a <b>secondary</b> (R+G = yellow). Feed all three back through a reversed prism to rebuild <b>white</b>. Settled optics <b>frost over</b> — beat <b>par</b>.',
+  },
+  {
+    title: 'Pre-cut optics (Hard)',
+    body: 'Hard boards ship a <b>tray</b> of pre-cut pieces. Tap one, then tap an empty <b>socket</b> ▢ to mount it (1 move). Tap a mounted piece to <b>lift it back</b> — free.',
   },
 ];
 const tutorial = createTutorial({ gameSlug: GAME_SLUG, steps: TUTORIAL_STEPS, helpCard: '#help .modal-card' });
@@ -376,7 +612,11 @@ function syncChrome() {
     btn.classList.toggle('active', btn.dataset.diff === state.diff && state.isDaily);
     btn.classList.toggle('done', doneToday(btn.dataset.diff)); // check mark on dailies cleared today
   });
-  document.getElementById('mode-label').textContent = state.isDaily ? `${DIFF_LABEL[state.diff]} · today` : 'Random';
+  // During an archive replay the label names the replayed day, not "today".
+  const replayKey = getArchiveDate();
+  document.getElementById('mode-label').textContent = !state.isDaily ? 'Random'
+    : replayKey ? `${DIFF_LABEL[state.diff]} · Day ${archiveDayNumber(replayKey)} replay`
+    : `${DIFF_LABEL[state.diff]} · today`;
 }
 
 function boot() {
@@ -384,15 +624,19 @@ function boot() {
   lbUi.wire();
   createArchive({
     isDayDone: (key) => loadHistory(GAME_SLUG).some((h) => h.date === key),
-    loadDailyForDate: (key) => { window.__archiveDateKey = key; document.getElementById('win').hidden = true; newGame(state ? state.diff : 'easy', true); },
+    loadDailyForDate: (key) => { enterArchiveDate(key); document.getElementById('win').hidden = true; newGame(state ? state.diff : 'easy', true); },
   }).wire();
   tutorial.wire();
   tutorial.maybeAutoStart();
-  // canvas colours come from CSS vars — re-render when the shared toggle flips theme
-  document.addEventListener('arcade:themechange', () => { if (state) render(); });
+  // canvas colours come from CSS vars — re-render (board + tray mini-canvases)
+  // when the shared toggle flips theme
+  document.addEventListener('arcade:themechange', () => { if (state) { render(); renderTray(); } });
   canvas().addEventListener('click', onClick);
-  document.querySelectorAll('.diff-btn').forEach((btn) => btn.addEventListener('click', () => { window.__archiveDateKey = null; document.getElementById('win').hidden = true; newGame(btn.dataset.diff, true); }));
-  document.getElementById('new-btn').addEventListener('click', () => { window.__archiveDateKey = null; document.getElementById('win').hidden = true; newGame(state.diff, false); });
+  // A difficulty switch is a within-day re-pick (each diff is its own board for
+  // the day), so it must NOT clear the replay date — it stays on the archived day.
+  document.querySelectorAll('.diff-btn').forEach((btn) => btn.addEventListener('click', () => { document.getElementById('win').hidden = true; newGame(btn.dataset.diff, true); }));
+  // Leaving the daily for a random board is a deliberate exit from the archive.
+  document.getElementById('new-btn').addEventListener('click', () => { exitArchive(); document.getElementById('win').hidden = true; newGame(state.diff, false); });
   const helpBtn = document.getElementById('helpButton');
   if (helpBtn) helpBtn.addEventListener('click', () => { document.getElementById('help').hidden = false; });
   // pause/resume the solve clock whenever the help overlay opens or closes

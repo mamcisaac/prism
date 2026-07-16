@@ -47,6 +47,31 @@ body {
 #board.shake { animation: shake .3s; }
 @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
 
+/* pre-cut optics tray (Hard): compact row docked under the board. Slots are
+   mini-canvases drawn by game.js with the same glyph code as the board. */
+.tray {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 10px auto 0; padding: 6px 12px; width: fit-content; max-width: 100%;
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 999px;
+}
+.tray[hidden] { display: none; } /* author display:flex would defeat [hidden] otherwise */
+.tray-label { font-size: 11px; color: var(--fg-subtle); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; margin-right: 2px; }
+.tray-empty { font-size: 12px; color: var(--fg-subtle); font-style: italic; padding: 8px 4px; }
+.tray-slot {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 44px; min-height: 44px; padding: 2px; cursor: pointer;
+  background: transparent; border: 2px solid transparent; border-radius: 10px; transition: border-color .15s;
+}
+.tray-slot:hover { border-color: var(--border-strong); }
+.tray-slot.selected { border-color: var(--accent); background: var(--bg-elev-2); }
+/* "look down here" hint when an empty socket is tapped with nothing selected */
+.tray.pulse { animation: tray-pulse .5s ease; }
+@keyframes tray-pulse {
+  0%, 100% { border-color: var(--border); transform: translateY(0); }
+  35% { border-color: var(--accent); transform: translateY(3px); }
+  70% { border-color: var(--accent); transform: translateY(0); }
+}
+
 .hud { display: flex; justify-content: center; gap: 30px; margin-top: 18px; }
 .stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .stat-num { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }

@@ -99,6 +99,65 @@
         }
     });
 
+    // ── Modal scroll lock (self-enforcing) ──────────────────────────────
+    // chrome.css declares `body.modal-open { overflow: hidden; … }`, but a
+    // convention every modal call-site must remember is a convention that
+    // drifts — an audit found ZERO call-sites engaging it. So ONE observer
+    // owns the `modal-open` lane: whenever any .modal-backdrop is visible,
+    // the body is locked; when the last one hides, it unlocks. Modules and
+    // games keep doing what they already do (flip `hidden`/`.hidden`) and
+    // inherit the lock for free — including modals built after load
+    // (archive, tutorial) and future ones.
+    // Opening a modal also closes any open bottom sheet: sheets sit at a
+    // higher z-index (1100 vs the backdrop's 100), so an endgame modal
+    // could otherwise appear invisibly UNDERNEATH a still-open sheet.
+    // Lane ownership: `modal-open` = this observer (never hand-toggle it);
+    // `drawer-open` = arcade-sheets.js; `popup-open` = free for a game's
+    // own non-backdrop surfaces.
+    function backdropVisible(el) {
+        if (el.hidden || el.classList.contains('hidden')) return false;
+        // checkVisibility also catches display:none inherited from a parent.
+        return el.checkVisibility ? el.checkVisibility() : el.style.display !== 'none';
+    }
+    var modalLockOn = false;
+    function syncModalLock() {
+        var on = false;
+        var els = document.querySelectorAll('.modal-backdrop');
+        for (var i = 0; i < els.length; i++) {
+            if (backdropVisible(els[i])) { on = true; break; }
+        }
+        if (on === modalLockOn) return;
+        modalLockOn = on;
+        if (document.body) document.body.classList.toggle('modal-open', on);
+        if (on && window.ArcadeSheets && window.ArcadeSheets.closeAllSheets) {
+            window.ArcadeSheets.closeAllSheets();
+        }
+    }
+    function nodesTouchBackdrop(nodes) {
+        for (var i = 0; i < nodes.length; i++) {
+            var n = nodes[i];
+            if (n.nodeType !== 1) continue;
+            if (n.classList.contains('modal-backdrop')) return true;
+            if (n.querySelector && n.querySelector('.modal-backdrop')) return true;
+        }
+        return false;
+    }
+    new MutationObserver(function (muts) {
+        // Cheap relevance gate: games mutate classes constantly during play;
+        // only a mutation on/around a backdrop warrants the re-scan.
+        for (var i = 0; i < muts.length; i++) {
+            var m = muts[i];
+            if (m.type === 'attributes') {
+                if (m.target.classList && m.target.classList.contains('modal-backdrop')) { syncModalLock(); return; }
+            } else if (nodesTouchBackdrop(m.addedNodes) || nodesTouchBackdrop(m.removedNodes)) {
+                syncModalLock(); return;
+            }
+        }
+    }).observe(document.documentElement, {
+        subtree: true, childList: true,
+        attributes: true, attributeFilter: ['hidden', 'class', 'style']
+    });
+
     // Intercepted at click/auxclick time so we never depend on init() having
     // run successfully on first paint. Mutates the href just before the
     // browser follows it, so the destination receives ?theme=<current> and
@@ -119,6 +178,9 @@
     document.addEventListener('touchstart', rewriteLinkOn, { capture: true, passive: true });
 
     function init() {
+        // A modal already visible at load (e.g. a start/intro modal in the
+        // markup) predates any mutation — sync the lock once explicitly.
+        syncModalLock();
         var toggles = document.querySelectorAll('#themeToggle, [data-arcade-theme-toggle]');
         toggles.forEach(function (t) {
             t.setAttribute('aria-pressed', current() === 'dark' ? 'true' : 'false');

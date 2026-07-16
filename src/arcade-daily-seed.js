@@ -23,16 +23,22 @@
 // Classic consumers must load arcade-archive.js BEFORE this file.
 // ============================================================
 
-import { archiveDateKey, archiveDayNumber } from './arcade-archive.js';
+import { archiveDateKey, archiveDayNumber, getArchiveDate } from './arcade-archive.js';
 
 // The date key the daily should be built from right now: the archived day
 // being replayed if one is active, else today (local calendar — the daily
 // rolls over at local midnight, same basis as the archive + daily boards).
+// The replay date itself is owned by arcade-archive.js (getArchiveDate /
+// enterArchiveDate / exitArchive) — this is only the read side.
 export function dailyDateKey() {
-  if (typeof window !== 'undefined' && window.__archiveDateKey) {
-    return String(window.__archiveDateKey);
-  }
-  return archiveDateKey(new Date());
+  return getArchiveDate() || archiveDateKey(new Date());
+}
+
+// Convenience for games that seed from a Date rather than a key. Same source
+// of truth as dailyDateKey(), so it honors an archived replay identically.
+export function dailyDate() {
+  const p = String(dailyDateKey()).split('-').map(Number);
+  return new Date(p[0], p[1] - 1, p[2]);
 }
 
 export function dailyDayNumber(key) {

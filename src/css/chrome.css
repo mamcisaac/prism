@@ -14,6 +14,8 @@
      .modal-backdrop — full-viewport overlay backdrop
      .modal         — centered modal card
      .modal-close-x — × close button in modal corner
+     body.popup-open / .drawer-open / .modal-open
+                    — scroll lock for the page behind an open popup
      .arcade-footer — thin centered "Part of connectthethoughts.ca" link
 
    Conventions a game has to follow to inherit these for free:
@@ -21,6 +23,12 @@
      - <button id="helpButton"> or [data-arcade-help]      → help button
      - [data-arcade-overlay] + [data-arcade-close]          → modal pair
        (arcade-theme.js binds Escape to click [data-arcade-close])
+     - .modal-backdrop popups lock the page AUTOMATICALLY (arcade-theme.js
+       observes visibility and toggles body.modal-open — never hand-toggle
+       it). Sheets lock via arcade-sheets.js (body.drawer-open). A game's own
+       non-backdrop overlay adds body.popup-open while open. Never re-add a
+       per-game body scroll lock; give the popup's own scroller
+       `overscroll-behavior: contain`.
      - <a> with class="game-card" or [data-arcade-pass-theme]
        gets ?theme= appended at click time (cross-origin theme)
 
@@ -117,6 +125,26 @@
 :root:not([data-theme="dark"]) .icon-moon { display: none; }
 [data-theme="dark"] .icon-sun { display: none; }
 
+/* ===== Scroll lock ===== */
+/* One arcade-wide convention: while a modal, popup, or bottom-sheet is open the
+   page behind it must not scroll. Lane ownership:
+     .modal-open  — set AUTOMATICALLY by arcade-theme.js's observer whenever any
+                    .modal-backdrop is visible. Never hand-toggle it.
+     .drawer-open — set by shared/arcade-sheets.js while any sheet is open.
+     .popup-open  — free for a game's own non-backdrop overlay surfaces.
+   Deliberately NOT `touch-action: none`: touch-action constrains descendants, so
+   it would also block panning INSIDE the popup. Deliberately NOT `position:
+   fixed`: it drops the page's scroll position when the popup closes.
+   A popup's own scroller should carry `overscroll-behavior: contain` so momentum
+   never chains out to the page (.modal below already does — the .modal card is
+   the element that scrolls, not the backdrop). */
+body.popup-open,
+body.drawer-open,
+body.modal-open {
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
 /* ===== Modal ===== */
 .modal-backdrop {
     position: fixed;
@@ -145,6 +173,9 @@
     max-height: calc(100vh - 32px);
     max-height: calc(100dvh - 32px);
     overflow-y: auto;
+    /* The card is the popup's scroller — momentum at its edges must not
+       chain out to the page behind it. */
+    overscroll-behavior: contain;
     padding: 24px;
     position: relative;
     font-family: var(--font-sans);
