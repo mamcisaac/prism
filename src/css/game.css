@@ -58,7 +58,17 @@ body {
   background: var(--bg-elev); border: 1px solid var(--border); border-radius: 999px;
 }
 .tray[hidden] { display: none; } /* author display:flex would defeat [hidden] otherwise */
-.tray-label { font-size: 11px; color: var(--fg-subtle); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; margin-right: 2px; }
+.tray-label { display: inline-flex; flex-direction: column; line-height: 1.35; font-size: 11px; color: var(--fg-subtle); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; margin-right: 2px; }
+.tray-label em { font-style: normal; font-weight: 500; font-size: 9px; letter-spacing: .03em; text-transform: none; white-space: nowrap; }
+/* one-time "angles are fixed" caption under the tray */
+.tray-hint {
+  width: fit-content; max-width: 92%; margin: 8px auto 0; padding: 6px 14px;
+  font-size: 13px; color: var(--fg); text-align: center;
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px;
+  animation: pop .25s ease;
+}
+.tray-hint strong { color: var(--fg); }
+.tray-hint[hidden] { display: none; }
 .tray-empty { font-size: 12px; color: var(--fg-subtle); font-style: italic; padding: 8px 4px; }
 .tray-slot {
   display: inline-flex; align-items: center; justify-content: center;

@@ -95,6 +95,8 @@
 
     <!-- pre-cut optics tray (Hard) — populated/shown by game.js when the board ships one -->
     <div id="tray" class="tray" role="group" aria-label="Pre-cut optics tray" hidden></div>
+    <!-- one-time caption after the first lift (players expect that tap to rotate) -->
+    <div id="tray-hint" class="tray-hint" role="status" hidden>Pre-cut glass: its angle is <strong>fixed</strong>. Find the socket where that angle works.</div>
 
     <div class="hud">
       <div class="stat"><span class="stat-num" id="panecount">0/0</span><span class="stat-cap">panes lit</span></div>
@@ -128,7 +130,7 @@
       <ul>
         <li><strong>Tap a mirror</strong> to flip it <code>/</code>↔<code>\</code>; <strong>tap a prism</strong> to spin it a quarter turn. The light re-routes instantly.</li>
         <li><strong>Colours mix.</strong> Cross two beams at a pane for a secondary (R+G = yellow). Feed all three primaries back into a reversed prism to rebuild white.</li>
-        <li><strong>Hard: pre-cut optics.</strong> Some pieces come in a <strong>tray</strong> below the board — tap one, then tap an empty <strong>socket</strong> ▢ to mount it (1 move). Tap a mounted piece to lift it back, free.</li>
+        <li><strong>Hard: pre-cut optics.</strong> Tray pieces have their angle <strong>already cut</strong> — a mounted piece <strong>can't rotate</strong>. Tap one, then tap the empty <strong>socket</strong> ▢ where that angle works (1 move). Tapping a mounted piece lifts it back, free.</li>
         <li>Dim pieces are <strong>fixed</strong>; as panes settle, the optics feeding them <strong>frost over</strong> — that part is done.</li>
         <li>Every puzzle has <strong>one</strong> solution. Beat <strong>par</strong> for a clean solve.</li>
       </ul>

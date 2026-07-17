@@ -235,9 +235,11 @@ pieces → moves feel trivial; more / longer chains → players lose causality.
   centre bead** (half-silvered), so pass-through light never reads as light penetrating a
   solid mirror.
 - **Sockets (Hard):** a dashed square mount outline — clearly "something goes here" and
-  clearly not a pane (diamonds). Empty mounts brighten while a tray piece is selected;
-  mounted pieces draw exactly like their bare counterparts (one shared glyph code path,
-  reused by the tray's mini-canvas slots).
+  clearly not a pane (diamonds). While a tray piece is selected, empty mounts brighten
+  AND show a faint **ghost** of the piece at its fixed angle (placement chooses *where*,
+  never *how it's turned*); mounted pieces draw exactly like their bare counterparts (one
+  shared glyph code path, reused by the tray's mini-canvas slots) inside a solid outline
+  with **corner clamps** — bolted in, not rotatable.
 - On each move: satisfied panes crystallise (scale-pop + glow + bloom pulse + chime);
   locked optics get a subtle frosted overlay.
 - **Tri-state cue convention** (arcade-wide): panes use their tint (dark), `--warn` (lit

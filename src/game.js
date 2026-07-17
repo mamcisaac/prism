@@ -150,6 +150,7 @@ function newGame(diff, isDaily) {
   bloomUntil = 0; // a win bloom must not bleed into the next board
   syncClock(); // if a first-play tutorial / help is already open, pause the just-started clock
   const li = document.getElementById('lb-inline'); if (li) li.innerHTML = '';
+  const th = document.getElementById('tray-hint'); if (th) th.hidden = true; clearTimeout(hintTimer);
   layout();
   render();
   renderTray();
@@ -293,16 +294,24 @@ function render() {
     } else if (c.type === 'socket') {
       // Etched mount: a dashed square outline — clearly "something goes here",
       // and clearly not a pane (those are diamonds). When a tray piece is
-      // selected, empty mounts brighten to invite the placement.
+      // selected, empty mounts brighten to invite the placement. An occupied
+      // mount switches to a solid outline + corner clamps: bolted in, NOT
+      // rotatable (its angle was pre-cut).
       const m = cell * 0.15, inviting = !c.piece && traySel != null;
-      ctx.save(); ctx.setLineDash([4, 3]);
+      ctx.save(); if (!c.piece) ctx.setLineDash([4, 3]);
       ctx.strokeStyle = inviting ? accent : strong; ctx.lineWidth = inviting ? 2 : 1.5;
       ctx.globalAlpha = inviting ? 1 : 0.9;
       roundRect(ctx, pad + gx * cell + m, pad + gy * cell + m, cell - 2 * m, cell - 2 * m, 5); ctx.stroke();
       ctx.restore();
       if (c.piece) { // mounted piece draws exactly like its bare counterpart
         drawPieceGlyph(ctx, c.piece, X, Y, cell, { accent, subtle, strong, fixed: false, lk });
+        drawClamps(ctx, gx, gy, m, strong);
         if (c.piece.type === 'prism') drawPrismFan(ctx, t, gx, gy, X, Y, c.piece.orient, light);
+      } else if (inviting && state.board.tray[traySel]) {
+        // Ghost preview: how the selected pre-cut piece would sit HERE, at its
+        // fixed angle — the cue that placement chooses "where", never "how
+        // it's turned".
+        drawPieceGlyph(ctx, state.board.tray[traySel], X, Y, cell, { accent, subtle, strong, fixed: false, lk: false, alpha: 0.3 });
       }
     } else if (c.type === 'prism') {
       drawPieceGlyph(ctx, c, X, Y, cell, { accent, subtle, strong, fixed, lk });
@@ -342,10 +351,12 @@ function beamEntersBase(t, px, py, orient) {
 function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 
 // Draw a mirror / splitter / prism glyph centred on (X, Y) scaled to a `size`
-// px cell. ONE code path shared by the board pass, mounted sockets, and the
-// tray's mini-canvas slots — so a pre-cut piece looks identical everywhere.
-// o: { accent, subtle, strong, fixed, lk } (theme colours + state).
+// px cell. ONE code path shared by the board pass, mounted sockets, the tray's
+// mini-canvas slots, and socket ghost previews — so a pre-cut piece looks
+// identical everywhere. o: { accent, subtle, strong, fixed, lk, alpha? }
+// (theme colours + state; alpha < 1 draws a faint ghost).
 function drawPieceGlyph(ctx, piece, X, Y, size, o) {
+  const a = o.alpha == null ? 1 : o.alpha;
   const r = size * 0.34;
   if (piece.type === 'prism') {
     // Glassy triangle. Apex points toward `orient`; the base faces the light
@@ -356,14 +367,14 @@ function drawPieceGlyph(ctx, piece, X, Y, size, o) {
     const bc = [X - dvx * B, Y - dvy * B];       // base centre
     ctx.beginPath(); ctx.moveTo(X + dvx * A, Y + dvy * A);
     ctx.lineTo(bc[0] + pvx * Wd, bc[1] + pvy * Wd); ctx.lineTo(bc[0] - pvx * Wd, bc[1] - pvy * Wd); ctx.closePath();
-    ctx.fillStyle = o.fixed ? o.subtle : o.accent; ctx.globalAlpha = 0.16; ctx.fill();
-    ctx.globalAlpha = o.lk ? 0.55 : 1; ctx.strokeStyle = o.fixed ? o.strong : o.accent; ctx.lineWidth = o.fixed ? 2.5 : 3; ctx.lineJoin = 'round';
+    ctx.fillStyle = o.fixed ? o.subtle : o.accent; ctx.globalAlpha = 0.16 * a; ctx.fill();
+    ctx.globalAlpha = (o.lk ? 0.55 : 1) * a; ctx.strokeStyle = o.fixed ? o.strong : o.accent; ctx.lineWidth = o.fixed ? 2.5 : 3; ctx.lineJoin = 'round';
     ctx.stroke(); ctx.globalAlpha = 1;
     return;
   }
   // mirror / splitter
   ctx.strokeStyle = o.fixed ? o.subtle : o.accent;
-  ctx.globalAlpha = o.fixed ? 0.7 : (o.lk ? 0.55 : 1);
+  ctx.globalAlpha = (o.fixed ? 0.7 : (o.lk ? 0.55 : 1)) * a;
   ctx.lineWidth = o.fixed ? 3 : 4; ctx.lineCap = 'round';
   const dx = piece.orient === '/' ? r : -r;
   if (piece.type === 'splitter') {
@@ -379,6 +390,19 @@ function drawPieceGlyph(ctx, piece, X, Y, size, o) {
     ctx.beginPath(); ctx.moveTo(X - dx, Y + r); ctx.lineTo(X + dx, Y - r); ctx.stroke();
   }
   ctx.globalAlpha = 1;
+}
+
+// Corner clamp brackets on an occupied mount — reads "bolted in place" even at
+// 34px cells, so a mounted piece never looks rotatable.
+function drawClamps(ctx, gx, gy, m, color) {
+  const x0 = pad + gx * cell + m, y0 = pad + gy * cell + m;
+  const x1 = pad + (gx + 1) * cell - m, y1 = pad + (gy + 1) * cell - m;
+  const L = Math.max(4, cell * 0.12);
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const [bx, by, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) {
+    ctx.beginPath(); ctx.moveTo(bx + sx * L, by); ctx.lineTo(bx, by); ctx.lineTo(bx, by + sy * L); ctx.stroke();
+  }
+  ctx.restore();
 }
 
 // The prism's "aha" cue: when a beam enters the base, a tiny dispersion fan
@@ -415,7 +439,7 @@ function renderTray() {
   // we can restore focus (same index, clamped) after the rebuild.
   const slotsBefore = [...el.querySelectorAll('.tray-slot')];
   const focusIdx = slotsBefore.indexOf(document.activeElement);
-  el.innerHTML = '<span class="tray-label">Tray</span>';
+  el.innerHTML = '<span class="tray-label">Tray<em>pre-cut · fixed angle</em></span>';
   const tray = state.board.tray || [];
   if (!tray.length) {
     const d = document.createElement('span'); d.className = 'tray-empty'; d.textContent = 'all mounted';
@@ -458,6 +482,23 @@ function onTrayTap(k) {
   render(); // empty sockets brighten while a piece is selected
 }
 
+// One-time caption the first time a mounted piece is lifted: the tap that
+// players expect to rotate. Explains that pre-cut angles are fixed, so a
+// "wrong-looking" piece needs a different SOCKET, not a different angle.
+const HINT_KEY = 'ctt.prism.precutHint';
+let hintTimer = 0;
+function maybePrecutHint() {
+  try {
+    if (localStorage.getItem(HINT_KEY)) return;
+    localStorage.setItem(HINT_KEY, '1');
+  } catch (_) {}
+  const el = document.getElementById('tray-hint');
+  if (!el) return;
+  el.hidden = false;
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => { el.hidden = true; }, 4000);
+}
+
 // Brief "look down here" pulse on the tray — the hint for tapping an empty
 // socket with nothing selected.
 function pulseTray() {
@@ -484,6 +525,7 @@ function onSocketTap(i) {
   const before = trace(state.board).satisfied.size;
   if (mount.piece) {
     // Lift back to the tray — FREE (a misplacement only costs the re-placement).
+    maybePrecutHint(); // first lift is usually a rotate attempt — explain once
     state.board.tray.push(mount.piece);
     mount.piece = null;
     traySel = null; // lifting always clears the selection
@@ -633,7 +675,7 @@ const TUTORIAL_STEPS = [
   },
   {
     title: 'Pre-cut optics (Hard)',
-    body: 'Hard boards ship a <b>tray</b> of pre-cut pieces. Tap one, then tap an empty <b>socket</b> ▢ to mount it (1 move). Tap a mounted piece to <b>lift it back</b> — free.',
+    body: 'Hard boards ship a <b>tray</b> of pre-cut glass — each piece\'s angle is <b>already cut</b> and <b>can\'t rotate</b>. Tap one, then tap the <b>socket</b> ▢ where that angle works (1 move). Tapping a mounted piece <b>lifts it back</b> — free.',
   },
 ];
 const tutorial = createTutorial({ gameSlug: GAME_SLUG, steps: TUTORIAL_STEPS, helpCard: '#help .modal-card' });
