@@ -5,11 +5,11 @@
 import { generateBoard, mulberry32 } from './generate.js';
 import { trace, lockedSet, rotatableIndices, socketIndices, rotateOnce, ROTATABLE, DIRS, LEFT, RIGHT, xy, idx } from './engine.js';
 import {
-  isLeaderboardConfigured, submitScore, submitMetricCompletion, alltimeBoard,
-  cleanHandle, formatTime, rowParts, recordHistory, historyStats, loadHistory, reportStats, todayStr, streakLineHtml,
+  formatTime, rowParts, recordHistory, historyStats, loadHistory, reportStats, todayStr, streakLineHtml,
   loadSharedHandle, saveSharedHandle,
 } from './arcade-leaderboard.js';
 import { createLeaderboardModal } from './arcade-leaderboard-ui.js';
+import { createWinBoard } from './arcade-winboard.js';
 import { dailyDateKey } from './arcade-daily-seed.js';
 import { createArchive, enterArchiveDate, exitArchive, getArchiveDate, archiveDayNumber, isArchiving } from './arcade-archive.js';
 import { createTutorial } from './arcade-tutorial.js';
@@ -45,10 +45,6 @@ function dailySeed(diff) {
 
 // ---- leaderboard handle + per-board local bests ----
 let lbHandle = loadSharedHandle(GAME_SLUG);
-const BKEY = 'ctt.prism.bests2';
-function loadBests() { try { return JSON.parse(localStorage.getItem(BKEY)) || {}; } catch (_) { return {}; } }
-function saveBests(b) { try { localStorage.setItem(BKEY, JSON.stringify(b)); } catch (_) {} }
-let bests = loadBests();
 
 // ---- per-day run: first-attempt eligibility + the combined Total board ----
 const RKEY = 'ctt.prism.run';
@@ -582,54 +578,20 @@ function win() {
   ov.querySelector('.win-line').textContent = `Solved in ${state.moves} ${state.moves === 1 ? 'move' : 'moves'} · par ${state.par}`;
   ov.querySelector('.win-sub').textContent = state.isDaily ? `${DIFF_LABEL[state.diff]} daily · ${formatTime(timeMs)}` : 'Random puzzle';
   ov.querySelector('.win-streak').innerHTML = state.isDaily ? streakLineHtml(GAME_SLUG) : '';
-  renderWinLeaderboard(document.getElementById('lb-inline'), value, timeMs, run, firstAttempt);
+  let total = null;
+  if (run && DIFFS.every((d) => run.results[d])) {
+    const totalValue = DIFFS.reduce((s, d) => s + Math.max(0, run.results[d].moves - run.results[d].par) * 1e7, 0)
+      + DIFFS.reduce((s, d) => s + run.results[d].timeMs, 0);
+    const totalTime = DIFFS.reduce((s, d) => s + run.results[d].timeMs, 0);
+    const totalMoves = DIFFS.reduce((s, d) => s + run.results[d].moves, 0);
+    total = { board: totalBoardKey(), value: totalValue, meta: { moves: totalMoves, timeMs: totalTime } };
+  }
+  winboard.render(document.getElementById('lb-inline'), {
+    board: boardKeyForOffset(0, state.diff), value, difficulty: state.diff,
+    meta: { moves: state.moves, par: state.par, timeMs }, eligible: firstAttempt, total,
+  });
   ov.hidden = false;
   syncChrome();
-}
-
-// Post-win panel: submit the first daily attempt (prompting for a name once),
-// then show the standing board. Mirrors the other arcade dailies.
-function renderWinLeaderboard(mount, value, timeMs, run, firstAttempt) {
-  if (!mount) return;
-  mount.innerHTML = '';
-  if (!isLeaderboardConfigured()) return;
-  if (!state.isDaily) { mount.innerHTML = '<div class="lb-hint">Switch to a daily to join the leaderboard.</div>'; return; }
-  const board = boardKeyForOffset(0, state.diff);
-  // A past/random daily replay is read-only: show that day's board, never submit
-  // (submissions are reserved for the live first-play).
-  if (isArchiving()) { lbUi.renderBoard(mount, board, lbHandle || null); return; }
-  if (!firstAttempt) { lbUi.renderBoard(mount, board, lbHandle || null); return; }
-
-  async function doSubmit(name) {
-    if (bests[board] !== undefined && value >= bests[board]) { lbUi.renderBoard(mount, board, name); return; }
-    mount.innerHTML = '<div class="lb-status">Submitting…</div>';
-    const ok = await submitMetricCompletion({ game: GAME_SLUG, difficulty: state.diff, value, handle: name, board, meta: { moves: state.moves, par: state.par, timeMs } });
-    if (ok) { bests[board] = value; saveBests(bests); }
-    else if (bests[board] === undefined) { mount.innerHTML = '<div class="lb-status">Couldn\'t reach the leaderboard — your solve is saved under “You”.</div>'; return; }
-    lbUi.renderBoard(mount, board, name);
-    if (run && DIFFS.every((d) => run.results[d])) { // combined Total board once all three are done
-      const totalValue = DIFFS.reduce((s, d) => s + Math.max(0, run.results[d].moves - run.results[d].par) * 1e7, 0)
-        + DIFFS.reduce((s, d) => s + run.results[d].timeMs, 0);
-      const totalTime = DIFFS.reduce((s, d) => s + run.results[d].timeMs, 0);
-      const totalMoves = DIFFS.reduce((s, d) => s + run.results[d].moves, 0);
-      const tBoard = totalBoardKey();
-      if (bests[tBoard] === undefined || totalValue < bests[tBoard]) {
-        const meta = { moves: totalMoves, timeMs: totalTime, difficulty: 'total' };
-        const a = await submitScore({ game: GAME_SLUG, board: tBoard, handle: name, score: totalValue, meta });
-        const b = await submitScore({ game: GAME_SLUG, board: alltimeBoard('total', 2), handle: name, score: totalValue, meta });
-        if (a || b) { bests[tBoard] = totalValue; saveBests(bests); }
-      }
-    }
-  }
-
-  if (lbHandle) { doSubmit(lbHandle); return; }
-  mount.innerHTML = '<div class="lb-join"><div class="lb-join-title">🏆 Join today\'s leaderboard:</div>'
-    + '<div class="lb-join-row"><input id="lb-handle" class="lb-input" type="text" maxlength="24" placeholder="Your name" autocomplete="off" aria-label="Your name" />'
-    + '<button id="lb-submit" class="btn" type="button">Submit</button></div></div>';
-  const input = mount.querySelector('#lb-handle'), btn = mount.querySelector('#lb-submit');
-  input.focus();
-  btn.addEventListener('click', () => { const name = cleanHandle(input.value); if (!name) { input.focus(); return; } lbHandle = saveSharedHandle(name); doSubmit(name); });
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); });
 }
 
 const lbUi = createLeaderboardModal({
@@ -657,6 +619,17 @@ const lbUi = createLeaderboardModal({
     }
     return formatTime(best.timeMs || 0);
   },
+});
+
+// Post-win results-card panel (shared). Only the first daily attempt is eligible.
+const winboard = createWinBoard({
+  gameSlug: GAME_SLUG,
+  lbUi,
+  isDaily: () => state.isDaily,
+  isArchiving,
+  getHandle: () => lbHandle,
+  setHandle: (name) => { lbHandle = saveSharedHandle(name); },
+  bestsKey: 'ctt.prism.bests2',
 });
 
 // First-play tutorial — shared carousel mechanics; only this content is per-game.
