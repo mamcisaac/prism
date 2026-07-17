@@ -238,14 +238,25 @@ export function countPlacements(board, cap = Infinity) {
 // a piece locks when light has reached it and NO alternative orientation can
 // increase the satisfied-pane count — i.e. it's either useless or protecting a
 // solved pane. The productive frontier always stays unlocked.
-export function lockedSet(board) {
+//
+// Frost renders as "settled — there was never another answer", so it must
+// never touch a piece the solution still needs to move. Pass the generator's
+// `solution` ({ solved: [{i, o}], solvedSockets: [{socketIdx, piece}] }) and a
+// piece additionally frosts only in its SOLVED configuration: a rotatable at
+// its solved orient, a socket holding exactly its solved piece (type+orient;
+// decoy and misfilled mounts never frost). Only ever removes frost relative to
+// the heuristic alone. Without `solution`: heuristic behaviour, unchanged.
+export function lockedSet(board, solution) {
   const t = trace(board);
   const base = t.satisfied.size;
   const locked = new Set();
   if (base === 0) return locked;
+  const solvedO = solution ? new Map(solution.solved.map(({ i, o }) => [i, o])) : null;
+  const solvedS = solution ? new Map((solution.solvedSockets || []).map(({ socketIdx, piece }) => [socketIdx, piece])) : null;
   for (const i of rotatableIndices(board)) {
     if (!t.lit.has(i)) continue;            // light hasn't reached it yet → free
     const cell = board.cells[i];
+    if (solvedO && solvedO.has(i) && solvedO.get(i) !== cell.orient) continue; // must still move → free
     const o = cell.orient;
     let helps = false;
     for (const alt of orientStates(cell)) {
@@ -261,6 +272,10 @@ export function lockedSet(board) {
   for (const i of socketIndices(board)) {
     const mount = board.cells[i];
     if (!mount.piece) continue;
+    if (solvedS) {                          // frost only the solved assignment
+      const want = solvedS.get(i);
+      if (!want || want.type !== mount.piece.type || want.orient !== mount.piece.orient) continue;
+    }
     const p = mount.piece;
     mount.piece = null;                     // lift-test
     const after = trace(board).satisfied.size;

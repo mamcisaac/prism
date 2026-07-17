@@ -9,12 +9,17 @@
 //      secondary; hard ≥1 secondary-or-white), ≥3 rotatable pieces,
 //   6. hard's socket layer: tray of 2–3 pre-cut pieces, sockets ≥ tray (the
 //      rest are decoys), all mounts ship empty, the solved assignment solves,
-//      prism #1 is never lifted, par covers rotations AND placements.
+//      prism #1 is never lifted, par covers rotations AND placements,
+//   7. par sits inside the tier's parMin..parMax window,
+//   8. decoy sockets sit OFF every solved beam path (an empty mount must be a
+//      real decision, not a beacon),
+//   9. frost soundness at load: lockedSet(board, solution) never frosts a
+//      rotatable that must still move nor a socket not holding its solved piece.
 // Uniqueness (inevitability) stays a SOFT stat — reported, not required.
 import { generateBoard, TIERS } from '../src/generate.js';
 import {
   DIRS, idx, xy, trace, isSolved, countSolutions, countPlacements,
-  rotatableIndices, socketIndices,
+  rotatableIndices, socketIndices, lockedSet,
 } from '../src/engine.js';
 
 const N = 60;
@@ -80,9 +85,29 @@ for (const tier of Object.keys(TIERS)) {
     if (tier === 'medium' && !needs.some((n) => SECONDARY.includes(n))) errors.push(`${where}: no secondary pane (${needs})`);
     if (tier === 'hard' && !needs.some((n) => SECONDARY.includes(n) || n === 7)) errors.push(`${where}: no secondary/white pane (${needs})`);
 
-    // Base state (scrambled, tray unplaced) is a real puzzle.
+    // Base state (scrambled, tray unplaced) is a real puzzle, in the tier's window.
     if (isSolved(board)) errors.push(`${where}: ships pre-solved`);
     if (!(par > 0)) errors.push(`${where}: par=${par}`);
+    if (par < t.parMin || par > t.parMax) errors.push(`${where}: par ${par} outside ${t.parMin}–${t.parMax}`);
+
+    // Frost soundness at load (regression for the frost-lie bug): with the
+    // solution supplied, frost may only touch pieces already in their solved
+    // configuration — never a rotatable that must still move, never a socket
+    // whose contents differ from solvedSockets.
+    {
+      const locked = lockedSet(board, { solved, solvedSockets });
+      const oMap = new Map(solved.map(({ i, o }) => [i, o]));
+      for (const i of locked) {
+        const c = board.cells[i];
+        if (c.type === 'socket') {
+          const want = (solvedSockets || []).find((x) => x.socketIdx === i);
+          if (!c.piece || !want || want.piece.type !== c.piece.type || want.piece.orient !== c.piece.orient)
+            errors.push(`${where}: frost lies on socket@${i}`);
+        } else if (oMap.has(i) && oMap.get(i) !== c.orient) {
+          errors.push(`${where}: frost lies on rotatable@${i} (${c.orient} ≠ ${oMap.get(i)})`);
+        }
+      }
+    }
 
     // SOFT: uniqueness — placements count on hard, rotations elsewhere.
     // Both solvers restore the board, so check before mutating to solved.
@@ -105,6 +130,15 @@ for (const tier of Object.keys(TIERS)) {
     let fan = 0;
     for (const sg of tS.segs) if (sg.color === 1 || sg.color === 2 || sg.color === 4) fan |= sg.color;
     if (fan !== 7) errors.push(`${where}: R/G/B fan incomplete (${fan}/7)`);
+
+    // Decoy sockets (mounts with no solvedSockets entry) must sit off every
+    // solved beam path — board is in the solved state here, so lit is exact.
+    if (t.socketK) {
+      const solvedIdx = new Set((solvedSockets || []).map((x) => x.socketIdx));
+      for (const i of socketIndices(board)) {
+        if (!solvedIdx.has(i) && tS.lit.has(i)) errors.push(`${where}: decoy socket@${i} sits on a solved beam`);
+      }
+    }
 
     pars.push(par);
   }

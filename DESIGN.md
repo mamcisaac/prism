@@ -127,9 +127,12 @@ Notes:
 - Uniqueness is what makes the last moves feel *forced*. For the first build it can be
   best-effort (most constructed boards with enough panes are already unique); full
   enforcement is a fast-follow.
-- **Region-locking rule (safe, monotone):** a rotatable piece locks the moment *every* pane
-  its ray can possibly reach is already satisfied. This never traps the player (you only
-  lose pieces you no longer need) and shrinks the free set toward zero.
+- **Region-locking rule (frost, cosmetic):** a piece frosts when it is **lit**, sitting in
+  its **solved state** (orientation, or solved socket assignment), and **no longer
+  productive** — no alternative state would newly satisfy a pane right now. It is a
+  "settled, leave it" hint, derived fresh from the solved-state record after every move
+  (`lockedSet(board, solution)`); frosted pieces are never disabled, so experimenting stays
+  free and the board can never soft-lock.
 
 ## State model
 
@@ -203,7 +206,8 @@ piece, tap an empty socket → mounted, **1 move**; tap a mounted piece → lift
 **free** (a misplacement only costs the eventual re-placement). Prism #1 — the emitter's
 sight-line prism — is never lifted, so the opening white→fan image survives.
 `par = rotation tap-distances + placements`; uniqueness is checked over placements ×
-orientations (`countPlacements`); load-bearing mounted pieces frost like rotatables.
+orientations (`countPlacements`); mounted pieces frost under the same rule as rotatables
+(lit + in the solved socket + no longer productive).
 Easy/Medium have no sockets and no tray.
 
 **Cascade tuning (the 20–70% rule):** aim for ~1 rotatable piece per 3–4 cells, and keep
@@ -224,8 +228,9 @@ pieces → moves feel trivial; more / longer chains → players lose causality.
   direction; the faint cell grid stays.
 - **Prism glyph:** a glassy triangle — apex points toward `orient` (the straight/green
   exit), base faces the incoming light. When a beam enters the base, a tiny internal
-  **rainbow fan** previews the R/G/B dispersion (the "aha" cue). Orientation must be
-  readable at a glance; a tap visibly spins it.
+  **dispersion fan** previews the exit rays — only the primaries actually present in the
+  entering colour (white → full R/G/B fan, the "aha" cue; a pure-blue entry shows just
+  blue). Orientation must be readable at a glance; a tap visibly spins it.
 - **Splitter vs mirror:** a mirror is one bold diagonal; a splitter is **twin rails with a
   centre bead** (half-silvered), so pass-through light never reads as light penetrating a
   solid mirror.

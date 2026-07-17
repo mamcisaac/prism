@@ -336,10 +336,12 @@ export function generateBoard(seed, tierName = 'easy') {
   }
   if (best) { best.tier = tierName; best.seed = seed; return best; }
   // Pathological fallback (should not happen): keep trying the SAME tier with
-  // fresh salts so tier invariants (grid, prisms, quotas) always hold.
+  // fresh salts so tier invariants (grid, prisms, quotas) always hold. Never
+  // return a dead board — a zero-pane board can't be won (isSolved needs
+  // paneCount > 0), so if even the salt sweep fails, fail loudly.
   for (let s = 0; s < 2000; s++) {
     const r = attempt(mulberry32((seed + 0x9e37 + s * 7919) >>> 0), t);
     if (r) { r.tier = tierName; r.seed = seed; return r; }
   }
-  return { board: emptyBoard(t.w, t.h), par: 1, solved: [], sols: 0, tier: tierName, seed };
+  throw new Error(`prism generateBoard: no valid ${tierName} board for seed ${seed} after 2300 attempts`);
 }

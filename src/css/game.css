@@ -19,6 +19,11 @@ body {
    brand header, which also uses .topbar) — this is the in-stage difficulty/
    controls row, unrelated to the shared chrome topbar. */
 .diff-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+/* ≤360px: the controls row is wider than the screen — wrap it instead of
+   forcing a horizontal scroll. 375px+ layouts are untouched. */
+@media (max-width: 360px) {
+  .diff-topbar { flex-wrap: wrap; justify-content: center; row-gap: 8px; }
+}
 .topbar-right { display: inline-flex; align-items: center; gap: 10px; }
 .topbar-right .streak { font-size: 13px; color: var(--fg-muted); font-weight: 600; white-space: nowrap; }
 /* .diffs is prism's own segmented-pill wrapper (not the canonical .diff-row layout),
@@ -44,8 +49,6 @@ body {
 
 .board-wrap { display: flex; justify-content: center; }
 #board { touch-action: manipulation; cursor: pointer; border-radius: 18px; }
-#board.shake { animation: shake .3s; }
-@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
 
 /* pre-cut optics tray (Hard): compact row docked under the board. Slots are
    mini-canvases drawn by game.js with the same glyph code as the board. */

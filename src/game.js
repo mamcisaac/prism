@@ -87,8 +87,9 @@ function isShown(el) {
 }
 function overlayOpen() {
   return isShown(document.getElementById('tutorial-modal'))
-    || isShown(document.getElementById('help-modal'))
-    || isShown(document.getElementById('help'));
+    || isShown(document.getElementById('help'))
+    || isShown(document.getElementById('lb-modal'))
+    || isShown(document.getElementById('archive-modal')); // lazily created by the shared lib
 }
 function pauseClock() {
   if (pausedAt || !(state && state.startMs)) return;
@@ -104,22 +105,56 @@ function syncClock() { overlayOpen() ? pauseClock() : resumeClock(); }
 document.addEventListener('arcade:tutorial', syncClock);
 window._clockState = () => ({ startMs: state && state.startMs, pausedAt });
 
+// ---- idle pre-generation of today's other tiers ----
+// Hard generation can block the main thread for 0.2–1.6s, so once a daily board
+// is up we build the day's OTHER tiers during idle time. Entries are SINGLE-USE
+// (boards mutate during play, so a cached board must never be handed out twice);
+// same generateBoard call → determinism untouched. Archive replays and random
+// boards are never pre-generated.
+const genCache = new Map(); // 'seed|diff' -> generateBoard result
+const idle = (fn) => (window.requestIdleCallback ? window.requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 350));
+function takeBoard(seed, diff) {
+  const k = seed + '|' + diff;
+  const g = genCache.get(k);
+  if (g) { genCache.delete(k); return g; }
+  return generateBoard(seed, diff);
+}
+function schedulePregen() {
+  if (!(state && state.isDaily) || dailyDateKey() !== todayStr()) return; // real today only
+  // All three tiers, including the one on screen: its cache entry was just
+  // consumed, so a spare keeps a return visit instant too.
+  const jobs = DIFFS.map((d) => ({ seed: dailySeed(d), diff: d }))
+    .filter((j) => !genCache.has(j.seed + '|' + j.diff));
+  const run = () => {
+    const j = jobs.shift();
+    if (!j) return;
+    if (!genCache.has(j.seed + '|' + j.diff)) genCache.set(j.seed + '|' + j.diff, generateBoard(j.seed, j.diff));
+    if (jobs.length) idle(run); // one tier per idle slice
+  };
+  if (jobs.length) idle(run);
+}
+
 function newGame(diff, isDaily) {
   const seed = isDaily ? dailySeed(diff) : (mulberry32((Date.now() ^ (Math.random() * 1e9)) >>> 0)() * 4294967296) >>> 0;
-  const g = generateBoard(seed, diff);
+  const g = takeBoard(seed, diff);
   // hasTray is decided once at game start: the tray row stays docked (emptying
   // out / refilling on lifts) for the whole game, and never appears on tiers
   // that ship without one.
   const hasTray = !!(g.board.tray && g.board.tray.length);
-  state = { diff, isDaily, board: g.board, par: g.par, moves: 0, finished: false, seed, startMs: Date.now(), hasTray };
+  // The solved-state record rides along for the engine's frost rule (a piece
+  // frosts only when lit AND in its solved state AND no longer productive).
+  const solution = { solved: g.solved || [], solvedSockets: g.solvedSockets || [] };
+  state = { diff, isDaily, board: g.board, par: g.par, moves: 0, finished: false, seed, startMs: Date.now(), hasTray, solution };
   traySel = null;
   pausedAt = 0;
+  bloomUntil = 0; // a win bloom must not bleed into the next board
   syncClock(); // if a first-play tutorial / help is already open, pause the just-started clock
   const li = document.getElementById('lb-inline'); if (li) li.innerHTML = '';
   layout();
-  render(true);
+  render();
   renderTray();
   syncChrome();
+  schedulePregen();
 }
 
 // ---- layout / canvas sizing ----
@@ -129,7 +164,9 @@ function layout() {
   const w = state.board.w, h = state.board.h;
   const avail = Math.min(wrap.clientWidth, 560);
   cell = Math.floor((avail - 2 * pad) / w);
-  cell = Math.max(34, Math.min(64, cell));
+  // Floor of 26 keeps an 8×8 Hard board inside a 320px viewport (34 would
+  // overflow); ≥375px screens land above the floor, so nothing changes there.
+  cell = Math.max(26, Math.min(64, cell));
   const cw = w * cell + 2 * pad, ch = h * cell + 2 * pad;
   const dpr = window.devicePixelRatio || 1;
   c.width = cw * dpr; c.height = ch * dpr;
@@ -141,12 +178,12 @@ const cy = (y) => pad + y * cell + cell / 2;
 
 // ---- render ----
 let bloomUntil = 0, raf = 0;
-function render(instant) {
+function render() {
   if (!state) return;
   const ctx = canvas().getContext('2d');
   const b = state.board;
   const t = trace(b);
-  const locked = state.finished ? new Set([...rotatableIndices(b), ...socketIndices(b)]) : lockedSet(b);
+  const locked = state.finished ? new Set([...rotatableIndices(b), ...socketIndices(b)]) : lockedSet(b, state.solution);
   const css = getComputedStyle(document.body);
   const fg = css.getPropertyValue('--fg').trim();
   const bgElev = css.getPropertyValue('--bg-elev').trim();
@@ -216,7 +253,7 @@ function render(instant) {
   const strong = css.getPropertyValue('--border-strong').trim();
   for (let i = 0; i < b.cells.length; i++) {
     const c = b.cells[i]; if (c.type === 'empty' || c.type === 'wall') continue;
-    const [gx, gy] = xy(i, b.w); const X = cx(gx), Y = cy(gy); const r = cell * 0.34;
+    const [gx, gy] = xy(i, b.w); const X = cx(gx), Y = cy(gy);
     const fixed = c.fixed, lk = locked.has(i);
     if (c.type === 'emitter') {
       const g = glow(c.color);
@@ -292,12 +329,15 @@ function render(instant) {
 }
 
 function colorGlyph(c) { return { 1: 'R', 2: 'G', 4: 'B', 3: 'Y', 5: 'M', 6: 'C', 7: 'W' }[c] || ''; }
-// Is a beam entering this prism's base? — a trace segment landing on the cell
-// while travelling `orient` (the base-entry direction). Drives the rainbow fan.
+// What colour is entering this prism's base? — OR of every trace segment
+// landing on the cell while travelling `orient` (the base-entry direction).
+// 0 = nothing. Drives the dispersion fan, which must only show the primaries
+// actually present (a pure-blue entry must not flash a full rainbow).
 function beamEntersBase(t, px, py, orient) {
   const [dx, dy] = DIRS[orient];
-  for (const s of t.segs) if (s.x1 === px && s.y1 === py && s.x1 - s.x0 === dx && s.y1 - s.y0 === dy) return true;
-  return false;
+  let mask = 0;
+  for (const s of t.segs) if (s.x1 === px && s.y1 === py && s.x1 - s.x0 === dx && s.y1 - s.y0 === dy) mask |= s.color;
+  return mask;
 }
 function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 
@@ -341,16 +381,19 @@ function drawPieceGlyph(ctx, piece, X, Y, size, o) {
   ctx.globalAlpha = 1;
 }
 
-// The prism's "aha" cue: when a beam enters the base, a tiny rainbow fan
-// previews the R/G/B dispersion (light theme: opaque inks — additive glow
-// washes out on cream). Board-pass only — tray prisms have no light yet.
+// The prism's "aha" cue: when a beam enters the base, a tiny dispersion fan
+// previews the exit rays — ONLY the primaries present in the entering colour
+// (light theme: opaque inks — additive glow washes out on cream). Board-pass
+// only — tray prisms have no light yet.
 function drawPrismFan(ctx, t, gx, gy, X, Y, orient, light) {
-  if (!beamEntersBase(t, gx, gy, orient)) return;
+  const mask = beamEntersBase(t, gx, gy, orient);
+  if (!mask) return;
   const [dvx, dvy] = DIRS[orient];
   const bc = [X - dvx * cell * 0.26, Y - dvy * cell * 0.26]; // base centre
   ctx.save(); if (!light) ctx.globalCompositeOperation = 'lighter';
   ctx.lineCap = 'round'; ctx.lineWidth = 2.5;
   for (const [dir, col] of [[LEFT[orient], 1], [orient, 2], [RIGHT[orient], 4]]) {
+    if (!(mask & col)) continue; // absent primary → no exit ray to preview
     const [fx, fy] = DIRS[dir]; const g = light ? beamInk(col) : glow(col);
     ctx.strokeStyle = g; ctx.shadowColor = g; ctx.shadowBlur = light ? 0 : 8;
     ctx.beginPath(); ctx.moveTo(bc[0], bc[1]); ctx.lineTo(bc[0] + fx * cell * 0.2, bc[1] + fy * cell * 0.2); ctx.stroke();
@@ -368,6 +411,10 @@ function renderTray() {
   const show = !!(state && state.hasTray);
   el.hidden = !show;
   if (!show) return;
+  // Rebuilding drops keyboard focus to <body>; remember which slot held it so
+  // we can restore focus (same index, clamped) after the rebuild.
+  const slotsBefore = [...el.querySelectorAll('.tray-slot')];
+  const focusIdx = slotsBefore.indexOf(document.activeElement);
   el.innerHTML = '<span class="tray-label">Tray</span>';
   const tray = state.board.tray || [];
   if (!tray.length) {
@@ -397,6 +444,11 @@ function renderTray() {
     btn.addEventListener('click', () => onTrayTap(k));
     el.appendChild(btn);
   });
+  if (focusIdx >= 0) { // keyboard user: keep focus in the tray across rebuilds
+    const slots = el.querySelectorAll('.tray-slot');
+    const s = slots[Math.min(focusIdx, slots.length - 1)];
+    if (s) s.focus();
+  }
 }
 
 function onTrayTap(k) {
@@ -467,6 +519,7 @@ function onClick(ev) {
 // ---- win ----
 function win() {
   state.finished = true;
+  traySel = null; renderTray(); // a rotation can win mid-selection — drop the highlight
   const timeMs = Date.now() - state.startMs;
   const dateKey = dailyDateKey();
   const isRealToday = dateKey === todayStr();
@@ -639,8 +692,16 @@ function boot() {
   document.getElementById('new-btn').addEventListener('click', () => { exitArchive(); document.getElementById('win').hidden = true; newGame(state.diff, false); });
   const helpBtn = document.getElementById('helpButton');
   if (helpBtn) helpBtn.addEventListener('click', () => { document.getElementById('help').hidden = false; });
-  // pause/resume the solve clock whenever the help overlay opens or closes
-  ['help-modal', 'help'].forEach((id) => { const h = document.getElementById(id); if (h) new MutationObserver(syncClock).observe(h, { attributes: true, attributeFilter: ['hidden', 'style', 'class'] }); });
+  // pause/resume the solve clock whenever a browsable overlay opens or closes —
+  // help, leaderboard, and the archive picker all stop the tiebreak clock.
+  const watchOverlay = (el) => new MutationObserver(syncClock).observe(el, { attributes: true, attributeFilter: ['hidden', 'style', 'class'] });
+  ['help', 'lb-modal'].forEach((id) => { const h = document.getElementById(id); if (h) watchOverlay(h); });
+  // #archive-modal is built lazily by the shared archive lib on first open, so
+  // watch the body until it appears, then hook it like the static modals.
+  new MutationObserver((_, obs) => {
+    const am = document.getElementById('archive-modal');
+    if (am) { watchOverlay(am); syncClock(); obs.disconnect(); }
+  }).observe(document.body, { childList: true });
   const muteBtn = document.getElementById('mute-btn');
   if (muteBtn) muteBtn.addEventListener('click', (e) => { muted = !muted; e.currentTarget.textContent = muted ? '🔇' : '🔊'; });
   // Canonical modal wiring: a [data-close] control or a click on the backdrop
