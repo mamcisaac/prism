@@ -11,7 +11,7 @@ import {
 } from './arcade-leaderboard.js';
 import { createLeaderboardModal } from './arcade-leaderboard-ui.js';
 import { dailyDateKey } from './arcade-daily-seed.js';
-import { createArchive, enterArchiveDate, exitArchive, getArchiveDate, archiveDayNumber } from './arcade-archive.js';
+import { createArchive, enterArchiveDate, exitArchive, getArchiveDate, archiveDayNumber, isArchiving } from './arcade-archive.js';
 import { createTutorial } from './arcade-tutorial.js';
 
 const GAME_SLUG = 'prism';
@@ -595,6 +595,9 @@ function renderWinLeaderboard(mount, value, timeMs, run, firstAttempt) {
   if (!isLeaderboardConfigured()) return;
   if (!state.isDaily) { mount.innerHTML = '<div class="lb-hint">Switch to a daily to join the leaderboard.</div>'; return; }
   const board = boardKeyForOffset(0, state.diff);
+  // A past/random daily replay is read-only: show that day's board, never submit
+  // (submissions are reserved for the live first-play).
+  if (isArchiving()) { lbUi.renderBoard(mount, board, lbHandle || null); return; }
   if (!firstAttempt) { lbUi.renderBoard(mount, board, lbHandle || null); return; }
 
   async function doSubmit(name) {
