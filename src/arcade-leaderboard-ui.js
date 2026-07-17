@@ -13,7 +13,14 @@
 //   getDifficulty()  -> current difficulty (for the default tab),
 //   getHandle()      -> current handle or null,
 //   boardKeyForOffset(offset, diff) -> per-day board key,
-//   dayLabelForOffset(offset)       -> e.g. "Today" / "2 days ago",
+//   baseDateKey?()   -> the PLAYED day's date key "YYYY-M-D" (i.e. dailyDateKey(),
+//                       which honors the archive). When supplied, the modal derives
+//                       the day label itself (relative to the real today), so a
+//                       replayed/random past daily is titled by its real date instead
+//                       of mislabelled "Today". Games that pass archive-aware board
+//                       keys should pass this and can drop dayLabelForOffset.
+//   dayLabelForOffset?(offset)      -> legacy per-game label "Today" / "2 days ago";
+//                       used only as a fallback when baseDateKey is absent,
 //   rowStat(r)       -> score column HTML for a standing row (game-specific),
 //   youRow(best, d)  -> score column HTML for the "You" tab,
 //   youOrder?        -> difficulty order for "You" (default difficulties+['total']),
@@ -41,7 +48,7 @@ const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
 export function createLeaderboardModal(config) {
   const {
     gameSlug, difficulties, diffLabel, maxOffset = 13,
-    getDifficulty, getHandle, boardKeyForOffset, dayLabelForOffset,
+    getDifficulty, getHandle, boardKeyForOffset, dayLabelForOffset, baseDateKey,
     rowStat, youRow,
     youHead = 'Your best by difficulty',
     // Single-board mode (omit `difficulties`): one daily board, no diff tabs.
@@ -61,6 +68,25 @@ export function createLeaderboardModal(config) {
   let lbOffset = 0;
   let lbDiff = null;
   let lbScope = 'today';
+
+  // Day-nav label. When the game supplies baseDateKey() (its archive-aware
+  // dailyDateKey), we describe (played day − offset) relative to the REAL today,
+  // so replaying/opening a past daily reads as its real date ("Jul 10"), not the
+  // stale "Today" the old per-game dayLabelForOffset produced during a replay.
+  // Falls back to the legacy per-game label when baseDateKey isn't provided.
+  function dayLabel(offset) {
+    const key = baseDateKey && baseDateKey();
+    if (!key) return dayLabelForOffset ? dayLabelForOffset(offset) : (offset === 0 ? 'Today' : offset + ' days ago');
+    const p = String(key).split('-').map(Number);
+    const d = new Date(p[0], p[1] - 1, p[2]);
+    d.setDate(d.getDate() - offset);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((today - d) / 86400000);
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays > 1 && diffDays < 7) return diffDays + ' days ago';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
 
   // Render a board (top 20) into `el`, highlighting the viewer's own rows.
   async function renderBoard(el, board, myHandle) {
@@ -124,7 +150,7 @@ export function createLeaderboardModal(config) {
       ? (isAll ? alltimeBoard(alltimeKey, alltimeVersion) : boardKeyForOffset(lbOffset))
       : (isAll ? alltimeBoard(d, alltimeVersion) : boardKeyForOffset(lbOffset, d));
     renderBoard(document.getElementById('lb-body'), board, getHandle() || null);
-    const dayPart = isAll ? 'All-time' : dayLabelForOffset(lbOffset);
+    const dayPart = isAll ? 'All-time' : dayLabel(lbOffset);
     document.getElementById('lb-day-label').textContent = single ? dayPart : dayPart + ' · ' + diffLabel[d];
     document.getElementById('lb-prev').disabled = lbOffset >= maxOffset;
     document.getElementById('lb-next').disabled = lbOffset <= 0;

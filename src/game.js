@@ -63,7 +63,6 @@ function recordRunResult(diff, timeMs, moves, par) { const r = loadRun(); if (!r
 const curDiff = () => (state ? state.diff : 'easy');
 function boardKeyForOffset(offset, diff) { const p = dailyDateKey().split('-').map(Number); const d = new Date(p[0], p[1] - 1, p[2]); d.setDate(d.getDate() - offset); const base = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); return base + '|' + (diff || curDiff()); }
 function totalBoardKey() { return dailyDateKey() + '|total'; }
-function dayLabelForOffset(offset) { if (offset === 0) return 'Today'; if (offset === 1) return 'Yesterday'; const d = new Date(); d.setDate(d.getDate() - offset); return d.toLocaleDateString('en', { month: 'short', day: 'numeric' }); }
 
 const doneToday = (diff) => loadHistory(GAME_SLUG).some((h) => h.date === todayStr() && h.difficulty === diff);
 
@@ -633,7 +632,7 @@ function renderWinLeaderboard(mount, value, timeMs, run, firstAttempt) {
 const lbUi = createLeaderboardModal({
   gameSlug: GAME_SLUG, difficulties: DIFFS, diffLabel: DIFF_LABEL,
   getDifficulty: () => curDiff(), getHandle: () => lbHandle,
-  boardKeyForOffset, dayLabelForOffset,
+  boardKeyForOffset, baseDateKey: () => dailyDateKey(),
   alltimeVersion: 2,
   // value = max(0, moves-par)*1e7 + timeMs (ascending): buckets are par bands.
   youStats: { metricLabel: 'Over par', buckets: [
