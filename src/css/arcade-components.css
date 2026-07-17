@@ -212,6 +212,28 @@
   text-align: center;
 }
 .placements { margin: 8px 0 4px; text-align: center; }
+/* "Your placement today" chips (arcade-placements.js fills the #placements
+   mount the results card creates on dailyComplete). Same pill idiom as the
+   leaderboard difficulty tabs so the card reads as one family. */
+.placements-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  margin-bottom: 6px;
+}
+.placements-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.place-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.place-lbl { font-size: 12px; font-weight: 600; color: var(--fg-muted); }
 .results-actions {
   display: flex;
   gap: 10px;
