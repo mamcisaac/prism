@@ -35,7 +35,8 @@ const DAILY_CHAIN = [
   ['tumbler', 'Tumbler'], ['mosaic', 'Mosaic'], ['Cornerstone', 'Cornerstone'],
   ['switchback', 'Switchback'], ['ladder', 'Ladder'], ['connect-the-thoughts', 'Connect the Thoughts'],
   ['the-dictionary-game', 'The Dictionary Game'], ['guess-the-date', 'Guess the Date'],
-  ['word-crush', 'Word Crush'], ['doublet-cross', 'Doublet Cross'],
+  ['doublet-cross', 'Doublet Cross'], ['mimic', 'Mimic'], ['true-north', 'True North'],
+  ['where-in-the-world', 'Where in the World?'], ['stencil', 'Stencil'],
 ];
 // Which game are we in? Explicit opts.gameSlug wins; otherwise infer from the
 // first path segment (production games live at <origin>/<slug>/).
